@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-10-04T10:30:00Z",
+  "service": "payment-service",
+  "name": "cpu_usage",
+  "value": 87.5,
+  "unit": "percent",
+  "tags": {
+    "environment": "production",
+    "host": "server-1"
+  }
+}
