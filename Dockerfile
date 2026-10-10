@@ -11,7 +11,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Python dosyalarını kopyala
-COPY main.py models.py celery_app.py tasks.py ./
+COPY main.py models.py celery_app.py tasks.py database.py ./
 
 # Konteyner açılınca worker'ı başlat
 CMD ["celery", "-A", "tasks.celery_app", "worker", "--loglevel=info", "--concurrency=2"]
