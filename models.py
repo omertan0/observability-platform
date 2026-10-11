@@ -1,4 +1,5 @@
 from typing import Literal
+import math
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, JsonValue, field_validator, model_validator
 
 # tanımladığımız modele göre gelen veriyi kontrol eder
@@ -18,6 +19,20 @@ class TelemetryInput(BaseModel):
             raise ValueError("timestamp saat dilimi içeren ISO 8601 metni olmalıdır")
         return value
 
+    @field_validator("tags")
+    @classmethod
+    def require_finite_tags(cls, value):
+        pending = [value]
+        while pending:
+            item = pending.pop()
+            if isinstance(item, dict):
+                pending.extend(item.values())
+            elif isinstance(item, list):
+                pending.extend(item)
+            elif isinstance(item, float) and not math.isfinite(item):
+                raise ValueError("tags içindeki sayılar sonlu olmalıdır")
+        return value
+
 
 class LogInput(TelemetryInput): # LogInput adinda log sablonu olusturduk
     level: Literal["INFO", "WARN", "ERROR", "FATAL"]
@@ -28,6 +43,12 @@ class MetricInput(TelemetryInput):
     name: str = Field(min_length=1, max_length=200, pattern=r"\S")
     value: float = Field(strict=True, allow_inf_nan=False)  # allow_inf_nan=False sossuzluk ve NaN gibi degerleri reddeder
     unit: str = Field(min_length=1, max_length=50, pattern=r"\S")
+
+    @model_validator(mode="after")
+    def check_cpu_percent(self):
+        if self.name == "cpu_usage" and self.unit == "percent" and not 0 <= self.value <= 100:
+            raise ValueError("cpu_usage percent değeri 0 ile 100 arasında olmalıdır")
+        return self
 
 
 class AlertRuleInput(BaseModel):
@@ -41,8 +62,8 @@ class AlertRuleInput(BaseModel):
     level: Literal["INFO", "WARN", "ERROR", "FATAL"] | None = None
     operator: Literal["gt", "gte", "lt", "lte"] = "gt"
     threshold: float = Field(strict=True, allow_inf_nan=False)
-    window_seconds: int = Field(default=300, ge=1, le=86400)
-    cooldown_seconds: int = Field(default=300, ge=0, le=86400)
+    window_seconds: int = Field(default=300, ge=1, le=86400, description="Log sayısı kuralının zaman penceresi; metrik eşiğinde kullanılmaz.")
+    cooldown_seconds: int = Field(default=300, ge=0, le=86400, description="Aynı kural ve servis için iki bildirim arasındaki en kısa süre.")
     enabled: bool = True
 
     @model_validator(mode="after")

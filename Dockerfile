@@ -11,7 +11,11 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Python dosyalarını kopyala
-COPY main.py models.py celery_app.py tasks.py database.py ./
+COPY main.py models.py celery_app.py tasks.py database.py alerts.py queries.py ./
+
+# Worker yönetici yetkisi olmadan çalışır.
+RUN useradd --uid 10001 --create-home appuser
+USER appuser
 
 # Konteyner açılınca worker'ı başlat
 CMD ["celery", "-A", "tasks.celery_app", "worker", "--loglevel=info", "--concurrency=2"]

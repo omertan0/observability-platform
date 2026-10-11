@@ -1,4 +1,9 @@
 -- Mevcut log ve metrik kayıtlarını koruyarak alarm tablolarını ekler.
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    version TEXT PRIMARY KEY,
+    applied_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
+);
+
 CREATE TABLE IF NOT EXISTS processed_tasks (
     task_id UUID PRIMARY KEY,
     kind TEXT NOT NULL CHECK (kind IN ('log', 'metric')),
@@ -62,10 +67,15 @@ CREATE INDEX IF NOT EXISTS idx_alerts_status_time ON alerts (status, triggered_a
 
 INSERT INTO alert_rules
     (name, kind, metric_name, metric_unit, operator, threshold, cooldown_seconds)
-VALUES ('CPU kullanımı %85 üzerinde', 'metric_threshold', 'cpu_usage', 'percent', 'gt', 85, 300)
+SELECT 'CPU kullanımı %85 üzerinde', 'metric_threshold', 'cpu_usage', 'percent', 'gt', 85, 300
+WHERE NOT EXISTS (SELECT 1 FROM schema_migrations WHERE version = '001_alerting')
 ON CONFLICT (name) DO NOTHING;
 
 INSERT INTO alert_rules
     (name, kind, level, operator, threshold, window_seconds, cooldown_seconds)
-VALUES ('5 dakikada 50 üzeri ERROR', 'log_count', 'ERROR', 'gt', 50, 300, 300)
+SELECT '5 dakikada 50 üzeri ERROR', 'log_count', 'ERROR', 'gt', 50, 300, 300
+WHERE NOT EXISTS (SELECT 1 FROM schema_migrations WHERE version = '001_alerting')
 ON CONFLICT (name) DO NOTHING;
+
+INSERT INTO schema_migrations (version) VALUES ('001_alerting')
+ON CONFLICT (version) DO NOTHING;

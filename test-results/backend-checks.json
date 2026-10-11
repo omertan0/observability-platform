@@ -1,0 +1,56 @@
+{
+  "checked_at_utc": "2026-10-11T16:35:34.517368+00:00",
+  "duration_seconds": 4.94,
+  "tests_run": 12,
+  "successful": true,
+  "checks": [
+    {
+      "test": "test_backend.BackendChecks.test_01_ingestion_and_filters",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendChecks.test_02_metric_threshold_boundary_and_cooldown",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendChecks.test_03_default_error_rule_at_51",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendChecks.test_04_unit_and_service_isolation",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendChecks.test_05_disabled_rule_and_update_validation",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendChecks.test_06_acknowledgement_is_idempotent",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendChecks.test_07_pagination",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendChecks.test_08_validation_and_missing_resources",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendChecks.test_09_duplicate_task_and_atomic_rollback",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendChecks.test_10_log_window_expired_and_level_isolation",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendChecks.test_11_cooldown_expires_and_comparison_operators",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendChecks.test_12_duplicate_rule_and_invalid_configuration",
+      "status": "passed"
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "checked_at_utc": "2026-10-11T16:36:44.848468+00:00",
+  "checks": [
+    {
+      "service": "redis",
+      "http_status": 503,
+      "readiness_status": 503,
+      "response_seconds": 2.03,
+      "detail": {
+        "detail": "Veri kuyruğa alınamadı; Redis bağlantısını kontrol edip tekrar deneyin."
+      },
+      "passed": true
+    },
+    {
+      "service": "db",
+      "http_status": 503,
+      "readiness_status": 503,
+      "response_seconds": 5.01,
+      "detail": {
+        "detail": "Veritabanı geçici olarak erişilemiyor; tekrar deneyin."
+      },
+      "passed": true
+    }
+  ],
+  "services_restored": true
+}

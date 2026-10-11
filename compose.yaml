@@ -26,6 +26,24 @@ services:
         condition: service_healthy
       db:
         condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
+
+  db-init:
+    image: timescale/timescaledb:latest-pg17
+    environment:
+      PGHOST: db
+      PGUSER: ${POSTGRES_USER}
+      PGDATABASE: ${POSTGRES_DB}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./schema.sql:/schema.sql:ro
+      - ./migrations:/migrations:ro
+    command: ["psql", "-v", "ON_ERROR_STOP=1", "--single-transaction", "-f", "/schema.sql", "-f", "/migrations/001_alerting.sql"]
+    depends_on:
+      db:
+        condition: service_healthy
+
   db:
     image: timescale/timescaledb:latest-pg17
     environment:
