@@ -1,0 +1,199 @@
+# Observability Platform
+
+FastAPI ile log ve metrik toplayan, Redis/Celery ile arka planda işleyen ve PostgreSQL/TimescaleDB üzerinde saklayan staj projesi. Bu sürüm filtreleme ve sistem içi alarm motorunu içerir.
+
+## Mimari
+
+```mermaid
+flowchart LR
+    U[Uygulama veya Swagger] --> A[FastAPI]
+    A --> Q[Redis kuyruğu]
+    Q --> W[Celery worker]
+    W --> D[PostgreSQL ve TimescaleDB]
+    W --> R[Alarm kurallarını değerlendir]
+    R --> D
+    A -->|GET ile oku| D
+```
+
+## Kurulum ve çalıştırma
+
+Docker Desktop Linux engine açık olmalıdır. API bilgisayarda Python ile, worker Linux konteynerinde çalışır. Python 3.13 veya 3.14 kullanılabilir; worker image Python 3.13 kullanır.
+
+1. Proje klasöründe sanal ortamı ve paketleri hazırlayın:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+2. `.env.example` dosyasını `.env` olarak kopyalayın, kullanıcı/veritabanı bilgilerini ve parolayı belirleyin. Mevcut `.env` varsa onu kullanın. `.env` Git'e gönderilmez.
+
+3. Veritabanı, kuyruk ve worker'ı açın:
+
+```powershell
+docker compose up -d --build --wait worker
+```
+
+`db-init` servisi şemayı ve alarm migration'ını bir transaction içinde uygular, sonra başarıyla kapanır. Bu normaldir. Scriptler yeniden çalıştırılabilir; mevcut kayıtlar korunur. Volume içinde önceden kurulmuş veritabanının parolası `.env` değiştirilerek otomatik değişmez.
+
+4. API'yi ayrı terminalde başlatın:
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn main:app --reload
+```
+
+Swagger: http://127.0.0.1:8000/docs
+
+- `GET /health`: API süreci çalışıyor mu?
+- `GET /ready`: Veritabanı şeması ve Redis erişilebilir mi? Worker sağlığını ölçmez.
+- Worker mesajları: `docker compose logs --tail=40 worker`
+- Kod değiştiğinde worker için yeniden `--build` gerekir; API `--reload` ile yenilenir.
+
+## Veri gönderme
+
+Tekli uçlara ek olarak `POST /logs/batch` ve `POST /metrics/batch`, JSON dizisi içinde 1-100 kayıt kabul eder. Tüm dizi önce doğrulanır; bir kayıt geçersizse görev kuyruğa alınmaz. Başarılı 202 cevabı `task_id` ve `record_count` içerir. Worker bütün paketi tek transaction içinde kaydeder; kayıtlar ve alarmlar birlikte onaylanır veya geri alınır.
+
+`POST /logs` örneği:
+
+```json
+{
+  "timestamp": "2026-10-11T12:00:00Z",
+  "service": "payment-service",
+  "level": "ERROR",
+  "message": "Database connection timeout",
+  "stack_trace": null,
+  "tags": {"environment": "test"}
+}
+```
+
+`POST /metrics` örneği:
+
+```json
+{
+  "timestamp": "2026-10-11T12:00:00Z",
+  "service": "payment-service",
+  "name": "cpu_usage",
+  "value": 90,
+  "unit": "percent",
+  "tags": {"environment": "test"}
+}
+```
+
+Başarılı gönderim `202` ve `task_id` döndürür. Bu yanıt kuyruğa kabul edildiğini gösterir; kayıt worker tarafından daha sonra oluşturulur. Geçersiz veri `422`, kuyruk/veritabanı bağlantı sorunu `503` döndürür. Parolalar hata yanıtlarına eklenmez.
+
+## Kayıtları okuma
+
+- `GET /logs`: `service`, `level`, `q`, `tags`, `start`, `end`, `limit`, `offset`.
+- `GET /metrics`: `service`, `name`, `unit`, `tags`, `start`, `end`, `limit`, `offset`.
+- `start` ve `end`, olay zamanı `timestamp` üzerinde dahil sınırlarla filtreler; saat dilimi gerekir.
+- `q`, `simple` sözlüğüyle kelime araması yapar; alt metin araması değildir. Örnek: `timeout`.
+- `tags` bir JSON nesnesi metnidir; örnek `{"environment":"test"}`. Swagger URL kodlamasını yapar.
+- `limit` varsayılan 20, en fazla 200; `offset` 0 ile 100000 arasındadır.
+- Cevap: `items`, `limit`, `offset`, `has_more`, `next_offset`.
+- Yeni olaylar en üstte gösterilir. Offset ile sayfalama sırasında yeni kayıt gelirse sayfalar kayabilir; canlı ekran için cursor/SSE sonraki aşamada hazırlanacaktır.
+
+## Alarm sistemi
+
+Kurallar yeni kayıt işlenirken anlık değerlendirilir. Bildirimler `alerts` tablosuna kaydedilir ve `GET /alerts` ile okunur.
+
+Varsayılan kurallar:
+
+| Kural | Koşul | Tekrar bekleme süresi |
+|---|---|---|
+| CPU | `cpu_usage`, `percent`, değer **85'ten büyük** | Her servis için 300 saniye |
+| ERROR sayısı | Bir serviste son 300 saniyede **50'den fazla ERROR** | Her servis için 300 saniye |
+
+CPU tam 85 olduğunda ve ERROR sayısı tam 50 olduğunda varsayılan alarm oluşmaz. Log sayısı kuralı API'nin kayıt aldığı `received_at` zamanını kullanır; pencere `(şimdi - süre, şimdi]` şeklindedir. Gecikmiş ve pencere dışında kalan kayıtlar sayılmaz. Metrik kuralı yeni gelen tek ölçümü değerlendirir; geçmiş ortalama hesaplamaz. Birim ve metrik adı tam eşleşmelidir.
+
+### Kural oluşturma ve düzenleme
+
+- `GET /alert-rules`: Kuralları listele (`enabled`, `limit`, `offset`).
+- `POST /alert-rules`: Yeni kural oluştur.
+- `PATCH /alert-rules/{id}`: Gönderilen alanları değiştir; örneğin `{"enabled":false}`. Değişiklik sonrası bekleme durumu sıfırlanır; yeni ayarlar sonraki kayıtta uygulanır. Önceki kayıtlar yeniden değerlendirilmez.
+
+Metrik kuralı örneği:
+
+```json
+{
+  "name": "Ödeme yanıt süresi",
+  "kind": "metric_threshold",
+  "service": "payment-service",
+  "metric_name": "response_time",
+  "metric_unit": "ms",
+  "operator": "gt",
+  "threshold": 500,
+  "cooldown_seconds": 300,
+  "enabled": true
+}
+```
+
+Log kuralı örneği:
+
+```json
+{
+  "name": "Ödeme hata yoğunluğu",
+  "kind": "log_count",
+  "service": "payment-service",
+  "level": "ERROR",
+  "operator": "gte",
+  "threshold": 10,
+  "window_seconds": 300,
+  "cooldown_seconds": 300,
+  "enabled": true
+}
+```
+
+`service: null` tüm servisleri ayrı ayrı değerlendirir. Metrik karşılaştırmaları: `gt` (>), `gte` (>=), `lt` (<), `lte` (<=). Log sayısında `gt` ve `gte` kullanılır. Aynı isimli kural `409`, bulunmayan kural/alarm `404` döndürür.
+
+### Bildirimleri görme
+
+- `GET /alerts`: `service`, `status`, `rule_id`, `limit`, `offset` ile listele.
+- `PATCH /alerts/{id}/acknowledge`: Bildirimi görüldü olarak işaretle. Tekrar çağırmak ilk görülme zamanını değiştirmez.
+
+`acknowledged`, kullanıcının bildirimi gördüğünü belirtir; sistemin normale döndüğünü belirtmez. Otomatik çözülme, e-posta ve webhook bu sürümde yoktur. Ödevdeki sistem içi bildirim seçeneği uygulanmıştır.
+
+## Görevlerin güvenilir işlenmesi
+
+Worker işlemi başarıyla tamamladıktan sonra kuyruk mesajını onaylar. Geçici bağlantı/kilit/havuz hatalarında en fazla 5 tekrar denenir. Aynı Celery görev kimliği yeniden teslim edilirse `processed_tasks` ile çift kayıt/alarm engellenir. Toplu görevdeki kayıt sayısı da saklanır. Kayıtlar, görev kimliği ve alarmlar aynı transaction içinde onaylanır. API'ye yeniden POST göndermek yeni görev oluşturur; istemci tekrarları için idempotency anahtarı henüz yoktur.
+
+`GET /tasks/{task_id}` görevin `PENDING`, `STARTED`, `RETRY`, `SUCCESS` veya `FAILURE` durumunu verir. Sonuçlar Redis'in 1 numaralı veritabanında 24 saat tutulur. `PENDING` sonucu henüz olmayan, süresi dolmuş veya bilinmeyen bir kimliği de temsil edebilir; kimliğin varlığını kanıtlamaz. Başarısız görev kimliği worker loglarında aranabilir. Traceback API cevabına eklenmez. Bu takip, kalıcı bir hata arşivi veya otomatik yeniden oynatma sistemi değildir.
+
+### Bağlantı havuzu
+
+API her sorgu için yeni bağlantı açmak yerine mevcut bağlantıyı ödünç alıp geri verir. Windows API sürecinde varsayılan üst sınır 8, Docker worker alt süreci başına 2 bağlantıdır. Havuz ilk kullanımda oluşturulur, Celery ana sürecinde bağlantı açılmaz. Bağlantı alınmadan önce sağlık kontrolü yapılır; bekleme en fazla 5 saniye ve 32 bekleyen istekle sınırlıdır. Sorgu 10, kilit bekleme 5 saniye ile sınırlıdır. Çok sayıda API/worker süreci açılırsa toplam veritabanı bağlantı bütçesi ayrıca hesaplanmalıdır.
+
+## İşlevsel testler
+
+API, Redis, veritabanı ve worker çalışırken:
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+```
+
+Testler kendilerine ait servis ve kuralları oluşturur, sonunda yalnızca bu verileri temizler. Eşik sınırı, log zaman penceresi, filtreleme, sayfalama, kural düzenleme, bildirim onaylama, tekrar teslim ve transaction geri alma kontrol edilir.
+
+Sonuç dosyası oluşturan çalıştırma:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/verify_backend.py
+```
+
+Yerel kesinti/kurtarma kontrolleri servisleri kısa süre durdurur ve bir worker alt sürecini sonlandırır. Geliştirme ortamında, aktif veri gönderimi yokken çalıştırın:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/verify_recovery.py
+.\.venv\Scripts\python.exe scripts/verify_outages.py
+```
+
+Sınırlı yerel yük ölçümü:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/load_backend.py --records 1000 --concurrency 8 --batch-size 1 --label pooled
+.\.venv\Scripts\python.exe scripts/load_backend.py --records 1000 --concurrency 8 --batch-size 100 --label batch
+```
+
+Ölçüm JSON'ları `test-results` içinde tutulur. HTTP gecikmesi kuyruğa kabul cevabının süresidir; bütün kayıtların veritabanına ulaşma süresi ayrıca ölçülür. `--log-level ERROR --metric-value 90` alarm koşullarını da çalıştırır. Bu betik sabit ve sınırlı bir backend ölçümüdür; Faz 4'teki sürekli rastgele veri üreten simülatörün ve daha kapsamlı yük testlerinin yerine geçmez.
+
+## Sonraki aşama
+
+Faz 2 backend geliştirmesinden sonra React paneli, SSE canlı akışı, sürekli simülatör ve kapsamlı yük testleri, internette yayınlama ve sunum hazırlanacaktır. Yerel ölçümler başka donanım veya üretim ortamında aynı performansın sağlanacağını kanıtlamaz. API bu aşamada yerel geliştirme için hazırlanmıştır; canlıya alma aşamasında kimlik doğrulama ve erişim sınırları eklenecektir.

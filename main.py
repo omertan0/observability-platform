@@ -1,9 +1,10 @@
 from datetime import datetime, timezone
 import logging
 from typing import Annotated, Literal
+from uuid import UUID
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Path, Query, Request
+from fastapi import FastAPI, HTTPException, Path, Query, Request, Body
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from kombu.exceptions import OperationalError as BrokerError
@@ -13,18 +14,19 @@ from psycopg.rows import dict_row
 from pydantic import AwareDatetime, ValidationError
 from redis import Redis
 from redis.exceptions import RedisError
+from psycopg_pool import PoolTimeout, TooManyRequests
 
 # Ayarlar görev modülü içe alınmadan önce yüklenir.
 load_dotenv()
 
 from celery_app import celery_app
 from database import get_connection
-from models import LogInput, MetricInput, AlertRuleInput, AlertRulePatch
+from models import LogInput, MetricInput, AlertRuleInput, AlertRulePatch, MAX_BATCH_SIZE
 from queries import page, telemetry_filters
-from tasks import process_log, process_metric
+from tasks import process_log, process_metric, process_logs_batch, process_metrics_batch
 
 logger = logging.getLogger(__name__)
-app = FastAPI(title="Observability Platform", version="0.2.0",
+app = FastAPI(title="Observability Platform", version="0.3.0",
               description="Log/metrik toplama, filtreleme ve sistem içi alarm API'si.")
 
 Limit = Annotated[int, Query(ge=1, le=200)]
@@ -45,6 +47,8 @@ async def invalid_request(request: Request, exc: RequestValidationError):
 @app.exception_handler(OperationalError)
 @app.exception_handler(QueryCanceled)
 @app.exception_handler(LockNotAvailable)
+@app.exception_handler(PoolTimeout)
+@app.exception_handler(TooManyRequests)
 async def database_unavailable(request: Request, exc: Exception):
     logger.warning("Veritabanı işlemi tamamlanamadı: %s", type(exc).__name__)
     return JSONResponse(status_code=503, content={"detail": "Veritabanı geçici olarak erişilemiyor; tekrar deneyin."})
@@ -62,7 +66,7 @@ def ready():
         with get_connection() as conn:
             conn.execute("SELECT 1 FROM alert_rules LIMIT 1")
         checks["database"] = True
-    except (OperationalError, UndefinedTable, QueryCanceled, LockNotAvailable):
+    except (OperationalError, UndefinedTable, QueryCanceled, LockNotAvailable, PoolTimeout, TooManyRequests):
         pass
     try:
         with Redis.from_url(celery_app.conf.broker_url, socket_connect_timeout=2, socket_timeout=2) as client:
@@ -75,13 +79,20 @@ def ready():
 
 
 def enqueue(task, payload):
-    record = payload.model_dump(mode="json")
-    record["received_at"] = datetime.now(timezone.utc).isoformat()
+    is_batch = isinstance(payload, list)
+    items = payload if is_batch else [payload]
+    received_at = datetime.now(timezone.utc).isoformat()
+    records = [item.model_dump(mode="json") for item in items]
+    for record in records:
+        record["received_at"] = received_at
     try:
-        result = task.apply_async(args=[record], retry=False)
+        result = task.apply_async(args=[records if is_batch else records[0]], retry=False)
     except (BrokerError, RedisError, OSError):
         raise HTTPException(503, "Veri kuyruğa alınamadı; Redis bağlantısını kontrol edip tekrar deneyin.")
-    return {"status": "queued", "task_id": result.id}
+    response = {"status": "queued", "task_id": result.id}
+    if is_batch:
+        response["record_count"] = len(records)
+    return response
 
 
 @app.post("/logs", status_code=202, tags=["Loglar"])
@@ -92,6 +103,31 @@ def receive_log(log: LogInput):
 @app.post("/metrics", status_code=202, tags=["Metrikler"])
 def receive_metric(metric: MetricInput):
     return enqueue(process_metric, metric)
+
+
+@app.post("/logs/batch", status_code=202, tags=["Loglar"])
+def receive_logs_batch(logs: Annotated[list[LogInput], Body(min_length=1, max_length=MAX_BATCH_SIZE)]):
+    return enqueue(process_logs_batch, logs)
+
+
+@app.post("/metrics/batch", status_code=202, tags=["Metrikler"])
+def receive_metrics_batch(metrics: Annotated[list[MetricInput], Body(min_length=1, max_length=MAX_BATCH_SIZE)]):
+    return enqueue(process_metrics_batch, metrics)
+
+
+@app.get("/tasks/{task_id}", tags=["Görevler"])
+def task_status(task_id: UUID):
+    try:
+        result = celery_app.AsyncResult(str(task_id))
+        state = result.state
+    except (BrokerError, RedisError, OSError):
+        raise HTTPException(503, "Görev durumuna erişilemiyor; Redis bağlantısını kontrol edin.")
+    # PENDING, kimliğin varlığını kanıtlamaz; sonucu henüz yok veya süresi dolmuş olabilir.
+    response = {"task_id": str(task_id), "state": state,
+                "completed": state in ("SUCCESS", "FAILURE"), "successful": state == "SUCCESS"}
+    if state == "FAILURE":
+        response["detail"] = "Görev başarısız oldu; worker loglarında bu kimliği arayın."
+    return response
 
 
 @app.get("/logs", tags=["Loglar"])

@@ -2,6 +2,8 @@ from typing import Literal
 import math
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, JsonValue, field_validator, model_validator
 
+MAX_BATCH_SIZE = 100
+
 # tanımladığımız modele göre gelen veriyi kontrol eder
 
 

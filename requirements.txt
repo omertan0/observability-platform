@@ -1,4 +1,4 @@
-﻿amqp==5.4.0
+amqp==5.4.0
 annotated-doc==0.0.5
 annotated-types==0.8.0
 anyio==4.15.1
@@ -17,6 +17,7 @@ packaging==26.3
 prompt_toolkit==3.0.53
 psycopg==3.3.6
 psycopg-binary==3.3.6
+psycopg-pool==3.3.3
 pydantic==2.13.5
 pydantic_core==2.46.5
 python-dateutil==2.9.0.post0

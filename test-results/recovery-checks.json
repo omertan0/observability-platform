@@ -1,0 +1,35 @@
+{
+  "checked_at_utc": "2026-10-11T21:15:04.471586+00:00",
+  "checks": [
+    {
+      "scenario": "worker_stopped_then_started",
+      "passed": true,
+      "record_count": 1,
+      "receipt_count": 1,
+      "state": "SUCCESS"
+    },
+    {
+      "scenario": "database_outage_retry_then_success",
+      "retry_observed": true,
+      "passed": true,
+      "record_count": 1,
+      "receipt_count": 1,
+      "state": "SUCCESS"
+    },
+    {
+      "scenario": "worker_child_lost_redelivery",
+      "worker_child_pid": 8,
+      "passed": true,
+      "record_count": 1,
+      "receipt_count": 1,
+      "state": "SUCCESS"
+    },
+    {
+      "scenario": "permanent_failure_visible_and_rolled_back",
+      "passed": true,
+      "record_count": 0,
+      "state": "FAILURE"
+    }
+  ],
+  "successful": true
+}

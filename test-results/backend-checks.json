@@ -1,7 +1,7 @@
 {
-  "checked_at_utc": "2026-10-11T16:35:34.517368+00:00",
-  "duration_seconds": 4.94,
-  "tests_run": 12,
+  "checked_at_utc": "2026-10-11T21:14:29.782945+00:00",
+  "duration_seconds": 6.49,
+  "tests_run": 16,
   "successful": true,
   "checks": [
     {
@@ -50,6 +50,22 @@
     },
     {
       "test": "test_backend.BackendChecks.test_12_duplicate_rule_and_invalid_configuration",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendChecks.test_13_batch_multiple_alerts_and_duplicate_delivery",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendChecks.test_14_batch_error_threshold_and_atomic_rollback",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendChecks.test_15_batch_validation_and_task_uuid",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendChecks.test_16_pooled_connections_reset_row_format",
       "status": "passed"
     }
   ]

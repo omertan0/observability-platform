@@ -1,0 +1,20 @@
+{
+  "checked_at_utc": "2026-10-11T21:16:07.491298+00:00",
+  "label": "batch",
+  "requested_records": 1000,
+  "accepted_records": 1000,
+  "saved_records": 1000,
+  "http_requests": 10,
+  "http_errors": [],
+  "concurrency": 8,
+  "batch_size": 100,
+  "acceptance_seconds": 0.174,
+  "total_seconds": 0.309,
+  "records_per_second": 3238.71,
+  "http_p50_ms": 102.93,
+  "http_p95_ms": 138.8,
+  "queue_peak_samples": 4,
+  "alert_count": 0,
+  "successful": true,
+  "workload": "Half INFO logs, half cpu_usage/percent=70 metrics; local machine, single run."
+}

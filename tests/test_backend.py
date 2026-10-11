@@ -20,7 +20,8 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 from database import get_connection
-from tasks import save_record
+from tasks import save_record, save_records
+from celery_app import celery_app
 
 BASE_URL = os.getenv("TEST_API_URL", "http://127.0.0.1:8000")
 
@@ -66,6 +67,8 @@ class BackendChecks(unittest.TestCase):
             conn.execute("DELETE FROM logs WHERE service = ANY(%s)", (cls.services,))
             conn.execute("DELETE FROM metrics WHERE service = ANY(%s)", (cls.services,))
             conn.execute("DELETE FROM processed_tasks WHERE task_id = ANY(%s::uuid[])", (cls.task_ids,))
+        for task_id in cls.task_ids:
+            celery_app.AsyncResult(task_id).forget()
 
     def service(self):
         value = "qa-" + uuid4().hex
@@ -261,6 +264,56 @@ class BackendChecks(unittest.TestCase):
         self.assertEqual(request("POST", "/alert-rules", {**body, "metric_unit": None})[0], 422)
         self.assertEqual(request("POST", "/alert-rules", {**body, "kind": "log_count", "metric_name": None,
                                                           "metric_unit": None, "level": "ERROR", "threshold": 1.5})[0], 422)
+
+    def test_13_batch_multiple_alerts_and_duplicate_delivery(self):
+        service, other = self.service(), self.service()
+        rule = self.rule(service=service, metric_name="cpu_usage", metric_unit="percent",
+                         threshold=85, cooldown_seconds=0)
+        body = [self.metric(service, 90), self.metric(service, 95), self.metric(other, 90)]
+        task_id = self.post("metrics/batch", body)
+        self.wait_saved([task_id])
+        self.assertEqual(len(self.items("/metrics", service=service)), 2)
+        self.assertEqual(len(self.items("/alerts", service=service, rule_id=rule["id"])), 2)
+        self.assertEqual(len(self.items("/alerts", service=other)), 1)
+        # Aynı batch görevi tekrar teslim edilirse hiçbir satır tekrar yazılmaz.
+        received_at = datetime.now(timezone.utc).isoformat()
+        records = [{**item, "received_at": received_at} for item in body]
+        save_records("metric", records, task_id)
+        self.assertEqual(len(self.items("/metrics", service=service)), 2)
+        status = wait_for(lambda: request("GET", f"/tasks/{task_id}")[1] if
+                          request("GET", f"/tasks/{task_id}")[1]["state"] == "SUCCESS" else None)
+        self.assertTrue(status["successful"])
+
+    def test_14_batch_error_threshold_and_atomic_rollback(self):
+        service = self.service()
+        task_id = self.post("logs/batch", [self.log(service) for _ in range(51)])
+        self.wait_saved([task_id])
+        alerts = self.items("/alerts", service=service)
+        self.assertEqual(len(alerts), 1)
+        self.assertEqual(alerts[0]["observed_value"], 51)
+        self.assertEqual(alerts[0]["source_record_index"], 50)
+        another = self.service()
+        records = [{**self.metric(another), "received_at": datetime.now(timezone.utc).isoformat()} for _ in range(2)]
+        failed_id = str(uuid4())
+        self.task_ids.append(failed_id)
+        with patch("tasks.evaluate_alerts", side_effect=[None, RuntimeError("batch rollback")]):
+            with self.assertRaises(RuntimeError):
+                save_records("metric", records, failed_id)
+        self.assertEqual(self.items("/metrics", service=another), [])
+
+    def test_15_batch_validation_and_task_uuid(self):
+        body = self.metric(self.service())
+        for batch in ([], [body] * 101, [body, {**body, "value": "bad"}]):
+            self.assertEqual(request("POST", "/metrics/batch", batch)[0], 422)
+        self.assertEqual(request("GET", "/tasks/not-a-uuid")[0], 422)
+
+    def test_16_pooled_connections_reset_row_format(self):
+        from psycopg.rows import dict_row
+        with get_connection() as conn:
+            conn.row_factory = dict_row
+            self.assertEqual(conn.execute("SELECT 1 AS value").fetchone()["value"], 1)
+        with get_connection() as conn:
+            self.assertEqual(conn.execute("SELECT 1").fetchone(), (1,))
 
 
 if __name__ == "__main__":

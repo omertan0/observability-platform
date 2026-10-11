@@ -4,6 +4,7 @@
 
 - POST /logs: Tek bir log kaydı kabul eder.
 - POST /metrics: Tek bir metrik kaydı kabul eder.
+- POST /logs/batch ve POST /metrics/batch: JSON dizisinde 1-100 kayıt kabul eder. Bir kayıt geçersizse bütün istek reddedilir. Başarılı 202 cevabı görev kimliği ve record_count içerir; worker paketi tek transaction içinde işler.
 
 ## Veri biçimi
 
@@ -63,3 +64,7 @@ Kural alanları ve JSON örnekleri README.md içinde açıklanmıştır. Metrik 
 - GET /ready: Veritabanı şeması ve Redis erişimini kontrol eder (200/503); worker durumunu kontrol etmez.
 
 Canlı OpenAPI tanımı /openapi.json, deneme ekranı /docs adresindedir.
+
+## Görev takibi
+
+GET /tasks/{task_id}: UUID biçimindeki kimlik için state, completed, successful döndürür. Durumlar PENDING, STARTED, RETRY, SUCCESS, FAILURE olabilir. Sonuçlar 24 saat saklanır. PENDING kimliğin var olduğunu kanıtlamaz; bilinmeyen veya süresi dolan kimlik için de dönebilir. Geçersiz kimlik 422, Redis erişim sorunu 503 döndürür. FAILURE durumunda genel açıklama verilir; hata ayrıntısı ve traceback worker loglarında kalır.

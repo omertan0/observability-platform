@@ -8,32 +8,45 @@ OPERATORS = {"gt": gt, "gte": ge, "lt": lt, "lte": le}
 SYMBOLS = {"gt": ">", "gte": ">=", "lt": "<", "lte": "<="}
 
 
-def evaluate_alerts(conn, kind: str, record: dict, task_id: str):
+def load_rules(conn, kind: str, records: list[dict]):
     # Aynı kuralı değerlendiren worker'lar sırayla ilerler; çift alarm önlenir.
     with conn.cursor(row_factory=dict_row) as cur:
         if kind == "metric":
             cur.execute(
                 """SELECT * FROM alert_rules
                    WHERE enabled AND kind = 'metric_threshold'
-                     AND (service IS NULL OR service = %s)
-                     AND metric_name = %s AND metric_unit = %s
+                     AND (service IS NULL OR service = ANY(%s))
+                     AND metric_name = ANY(%s) AND metric_unit = ANY(%s)
                    ORDER BY id FOR UPDATE""",
-                (record["service"], record["name"], record["unit"]),
+                ([r["service"] for r in records], [r["name"] for r in records], [r["unit"] for r in records]),
             )
         else:
             cur.execute(
                 """SELECT * FROM alert_rules
                    WHERE enabled AND kind = 'log_count'
-                     AND (service IS NULL OR service = %s) AND level = %s
+                     AND (service IS NULL OR service = ANY(%s)) AND level = ANY(%s)
                    ORDER BY id FOR UPDATE""",
-                (record["service"], record["level"]),
+                ([r["service"] for r in records], [r["level"] for r in records]),
             )
-        rules = cur.fetchall()
-        if not rules:
-            return
-        cur.execute("SELECT clock_timestamp() AS now")
-        now = cur.fetchone()["now"]
+        return cur.fetchall()
+
+
+def evaluate_alerts(conn, kind: str, record: dict, task_id: str, record_index=0, rules=None, now=None):
+    if rules is None:
+        rules = load_rules(conn, kind, [record])
+    if not rules:
+        return
+    with conn.cursor(row_factory=dict_row) as cur:
+        if now is None:
+            cur.execute("SELECT clock_timestamp() AS now")
+            now = cur.fetchone()["now"]
         for rule in rules:
+            if rule["service"] is not None and rule["service"] != record["service"]:
+                continue
+            if kind == "metric" and (rule["metric_name"] != record["name"] or rule["metric_unit"] != record["unit"]):
+                continue
+            if kind == "log" and rule["level"] != record["level"]:
+                continue
             if kind == "metric":
                 observed = record["value"]
             else:
@@ -63,10 +76,10 @@ def evaluate_alerts(conn, kind: str, record: dict, task_id: str):
             cur.execute(
                 """INSERT INTO alerts
                    (rule_id, rule_name, kind, service, message, observed_value,
-                    threshold, operator, source_task_id, triggered_at)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                    threshold, operator, source_task_id, triggered_at, source_record_index)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                 (rule["id"], rule["name"], rule["kind"], record["service"], message,
-                 observed, rule["threshold"], rule["operator"], task_id, now),
+                 observed, rule["threshold"], rule["operator"], task_id, now, record_index),
             )
             cur.execute(
                 """INSERT INTO alert_states (rule_id, service, last_triggered_at)
