@@ -3,6 +3,11 @@ from models import LogInput
 from models import LogInput, MetricInput
 from datetime import datetime, timezone
 from tasks import process_log, process_metric
+from dotenv import load_dotenv
+from database import get_connection
+from psycopg.rows import dict_row
+
+load_dotenv()
 
 app = FastAPI(title="Observability Platform")
 
@@ -34,3 +39,20 @@ def receive_metric(metric: MetricInput):
         "status": "queued",
         "task_id": task.id
     }
+
+@app.get("/logs")
+def list_logs():
+    with get_connection() as conn:
+        conn.row_factory = dict_row
+
+        records = conn.execute(
+            """
+            SELECT id, timestamp, received_at, service,
+            level, message, stack_trace, tags
+            FROM logs
+            ORDER BY timestamp DESC, id DESC
+            LIMIT 20
+            """
+        ).fetchall()
+
+    return {"items": records}

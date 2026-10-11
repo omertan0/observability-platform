@@ -10,4 +10,5 @@ def get_connection():
         user=os.environ["POSTGRES_USER"],
         password=os.environ["POSTGRES_PASSWORD"],
         connect_timeout=5,
+        options="-c statement_timeout=10000 -c lock_timeout=5000",
     )
