@@ -1,0 +1,52 @@
+{
+  "run_id": "e327af7996d34325a513fd6da5e7654a",
+  "started_at_utc": "2026-10-18T20:21:53.988837+00:00",
+  "services": [
+    "demo-payment"
+  ],
+  "scenario": "mixed",
+  "seed": 42,
+  "interval_seconds": 2.0,
+  "requested_duration_seconds": 20.0,
+  "cycles_completed": 10,
+  "accepted_logs": 10,
+  "accepted_metrics": 30,
+  "confirmed_logs": 10,
+  "confirmed_metrics": 30,
+  "failed_records": 0,
+  "finished_at_utc": "2026-10-18T20:22:14.275689+00:00",
+  "elapsed_seconds": 20.287,
+  "unconfirmed_records": 0,
+  "recent_task_ids": [
+    "46eeb2b2-7380-4849-b29f-e0895e779de0",
+    "fa7ab7ab-7cf2-4132-a96c-cd73152a27cb",
+    "fbc17b43-b479-424d-9001-cc99f7316e1b",
+    "6bb3e44b-3ca7-47b4-81fd-6f1c06603c07",
+    "8371c217-35d5-4a38-b00a-b2180e896aba",
+    "fde1eba8-8e44-49a2-aa6d-d8dbec953aa9",
+    "be13aab5-f552-444d-b717-2c3621889423",
+    "a32524aa-2b56-4f83-9def-fe7b4d317f1d",
+    "04b85570-b8b3-4352-906b-7c90edd16201",
+    "e24979e5-b13b-4fbd-bab7-8c80a7ac8236",
+    "ea12b5fd-5da8-4bf3-847d-7a48d143e2b0",
+    "81cbcc61-9b4c-4e3a-890d-6781deea68c8",
+    "f2064e30-8f90-46ca-9923-89bc833e9031",
+    "801d588e-6223-4a11-bdad-fdacb80d764a",
+    "bff0aed0-6393-40d9-b161-581a82c1edf1",
+    "bf165ed6-0587-47c3-a8d6-3701e76e771a",
+    "1524f166-2196-4691-98a0-72c6bf884fd4",
+    "c3fa9f89-86cf-4aa1-b125-878a51a8dcd9",
+    "7f770136-b6f3-4d49-9e83-96b648adacc8",
+    "53dd1951-373e-479e-a58f-9c71f783cc78"
+  ],
+  "interrupted": false,
+  "error": null,
+  "successful": true,
+  "verification": {
+    "api_readback_logs": 10,
+    "api_readback_metrics": 30,
+    "error_logs": 2,
+    "alerts_from_this_run": 1,
+    "demo_records_retained": true
+  }
+}

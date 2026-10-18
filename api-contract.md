@@ -78,6 +78,18 @@ Kural alanları ve JSON örnekleri README.md içinde açıklanmıştır. Metrik 
 
 Canlı OpenAPI tanımı /openapi.json, deneme ekranı /docs adresindedir.
 
+## Canlı metrik akışı
+
+API sürümü 0.5.0. `GET /stream/metrics`, `text/event-stream` döndürür. `service`, `name`, `unit`, `tags`, `start`, `end` filtreleri GET /metrics ile aynı yardımcı fonksiyonu kullanır. `limit` 1–200, varsayılan 100'dür; izlenen görünüm offset=0'dır. Geçersiz filtre ve limit başlıklardan önce 422 döndürür.
+
+`metrics_changed`, ilk bağlantıda ve filtreli son `limit + 1` kaydın timestamp/id özeti değiştiğinde gönderilir. JSON içindeki revision ile olayın id alanı aynı özettir. İstemci aynı filtreler ve limit ile GET /metrics?offset=0 çağırır. Fazladan satır has_more durumunu izler. CPU paneli service + name=cpu_usage + unit=percent + limit=100 kullanır. Böylece başka metrik veya birim kendi grafiğini yeniletmez. İzlenen pencereye girmeyen daha eski kayıtlar bildirim üretmez.
+
+Log akışındaki retry:3000, yaklaşık 15 saniyelik keepalive, iki saniyelik DB kontrolü, stream_status/unavailable, DB kurtarmasında eşitleme ve yeniden bağlantıda ilk bildirim davranışları burada da geçerlidir. Yalnızca commit edilmiş satırlar görülür. Olaylar her ölçümün kalıcı tekrar oynatımı değildir; güncel görünümü yeniden okutacak bildirimlerdir. Kayıtları değiştiren bir UPDATE API'si bulunmadığı için değişiklik özeti kimlik/zaman üzerinden hesaplanır; içerik düzenleme eklenirse bu izleme de genişletilmelidir.
+
+### Panelde kullanılan metrik adları
+
+Panel CPU için `name=cpu_usage&unit=percent`, bellek yüzdesi için `name=memory_usage&unit=percent`, yanıt süresi için `name=response_time&unit=ms` kullanır. GET ve SSE aynı seçili ad/birimle filtrelenir. API bu üç adla sınırlı değildir. Panelde yüzdeler 0–100, yanıt süresi negatif olmayan sonlu bir değer olarak beklenir; birim dönüşümü veya farklı serileri birleştirme yapılmaz.
+
 ## Görev takibi
 
 GET /tasks/{task_id}: UUID biçimindeki kimlik için state, completed, successful döndürür. Durumlar PENDING, STARTED, RETRY, SUCCESS, FAILURE olabilir. Sonuçlar 24 saat saklanır. PENDING kimliğin var olduğunu kanıtlamaz; bilinmeyen veya süresi dolan kimlik için de dönebilir. Geçersiz kimlik 422, Redis erişim sorunu 503 döndürür. FAILURE durumunda genel açıklama verilir; hata ayrıntısı ve traceback worker loglarında kalır.

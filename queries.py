@@ -42,6 +42,28 @@ def telemetry_filters(service, start, end, tags):
     return clauses, values
 
 
+def log_filters(service=None, level=None, q=None, tags=None, start=None, end=None):
+    # Liste ve canlı akış aynı filtreleri kullanır.
+    clauses, values = telemetry_filters(service, start, end, tags)
+    if level is not None:
+        clauses.append("level = %s")
+        values.append(level)
+    if q is not None:
+        clauses.append("to_tsvector('simple', message) @@ websearch_to_tsquery('simple', %s)")
+        values.append(q)
+    return clauses, values
+
+
+def metric_filters(service=None, name=None, unit=None, tags=None, start=None, end=None):
+    # Grafik sorgusu ve değişiklik bildirimi aynı kayıtları izler.
+    clauses, values = telemetry_filters(service, start, end, tags)
+    for column, value in (("name", name), ("unit", unit)):
+        if value is not None:
+            clauses.append(f"{column} = %s")
+            values.append(value)
+    return clauses, values
+
+
 def page(sql, clauses, values, order, limit, offset):
     # sql/order/clauses yalnızca kod içindeki sabitlerden gelir.
     where = " WHERE " + " AND ".join(clauses) if clauses else ""

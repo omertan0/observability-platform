@@ -1,5 +1,9 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import LogTable from './LogTable.jsx'
+import AlertsPanel from './AlertsPanel.jsx'
+import RulesPanel from './RulesPanel.jsx'
+
+const MetricsPanel = lazy(() => import('./MetricsPanel.jsx'))
 
 export default function App() {
   const [checking, setChecking] = useState(false)
@@ -87,7 +91,12 @@ export default function App() {
           })}
         </section>
 
+        <Suspense fallback={<section className="logs-panel"><p className="logs-feedback" role="status">Metrik grafiği hazırlanıyor…</p></section>}>
+          <MetricsPanel />
+        </Suspense>
         <LogTable />
+        <AlertsPanel />
+        <RulesPanel />
 
         <section className="workflow" aria-labelledby="workflow-title">
           <p className="eyebrow">VERİ AKIŞI</p>

@@ -199,7 +199,7 @@ Sınırlı yerel yük ölçümü:
 
 ### React paneli
 
-Panel `frontend` klasöründe React ve Vite ile çalışır. Node.js 24 kuruludur. Ekran API, veritabanı ve Redis bağlantısını kontrol eder ve logları filtreleyip 20 kayıtlık sayfalarla gösterir. İlk sayfa SSE ile otomatik yenilenir. Metrik grafikleri henüz eklenmemiştir.
+Panel `frontend` klasöründe React ve Vite ile çalışır. Node.js 24 kuruludur. Ekran API, veritabanı ve Redis bağlantısını kontrol eder ve logları filtreleyip 20 kayıtlık sayfalarla gösterir. İlk sayfa SSE ile otomatik yenilenir. Metrik grafiği, seçilen servis ve ölçümün kayıtlı son 100 örneğini canlı günceller. CPU (%), bellek (%) ve yanıt süresi (ms) seçilebilir.
 
 Proje kökünden ayrı bir terminalde:
 
@@ -227,7 +227,7 @@ Bu sürümde kontrol her açık SSE bağlantısı için yapılır. Çok sayıda 
 
 Derleme kontrolü: `npm.cmd run build`. Çıktı `frontend/dist` klasörüne yazılır. `node_modules`, npm önbelleği ve `dist` Git'e eklenmez; `package-lock.json` eklenir. Vite proxy ayarı geliştirme içindir; canlı dağıtımda `/api` yönlendirmesi ayrıca yapılandırılacaktır.
 
-`frontend` klasöründe `npm.cmd test`, sorgu oluşturma, URL kodlama, yerel zaman/UTC dönüşümü, geçersiz aralıklar ve sayfa sınırlarını denetler. Bunlar tarayıcıda görsel/tıklama testleri değildir.
+`frontend` klasöründe `npm.cmd test`, sorgu oluşturma, URL kodlama, yerel zaman/UTC dönüşümü, geçersiz aralıklar, sayfa sınırları, metrik serisi/zaman ekseni/birim seçimi, alarm filtreleri, görüldü yanıtı, kural formu ve kural kaydetme yanıtlarını denetler. Yirmi beş kontrol vardır; bunlar tarayıcıda görsel/tıklama testleri değildir.
 
 Panelin dosyaları:
 
@@ -237,10 +237,91 @@ Panelin dosyaları:
 - `src/LogTable.jsx`: Gerçek API kayıtlarını yükleyen, durumları ve log tablosunu gösteren bileşen.
 - `src/LogFilters.jsx`: Uygulanmadan önce düzenlenebilen filtre formu.
 - `src/LogDetails.jsx`: Seçilen kaydın tam mesaj, zaman, etiket ve hata izini gösteren detay penceresi.
+- `src/MetricsPanel.jsx`: Servis/metrik seçimi, grafik, ölçüm tablosu ve canlı metrik bildirimleri.
+- `src/metricQuery.js`: Metrik türleri, sorgu, ölçüm doğrulaması, birim biçimlendirmesi ve zaman ekseni.
+- `src/AlertsPanel.jsx`: Alarm listesi, servis/durum filtreleri, sayfalama ve görüldü işlemi.
+- `src/alertQuery.js`: Alarm sorguları ve liste/işlem yanıtlarının doğrulanması.
+- `src/RulesPanel.jsx`: Kural listesi, sayfalama, oluşturma/düzenleme ve açma/kapatma istekleri.
+- `src/RuleEditor.jsx`: Metrik ve log sayısı kuralı formu.
+- `src/ruleForm.js`: Kural taslağı, JSON hazırlama, doğrulama ve koşul açıklamaları.
 - `src/logQuery.js`: Filtre ve sayfa sorgularını oluşturur; zaman dönüşümü ve aralık kontrolü yapar.
 - `../streams.py`: Veritabanındaki liste değişikliklerini SSE ile bildiren backend modülü.
 - `src/styles.css`: Koyu tema ve küçük ekran düzeni.
 - `vite.config.js`: Geliştirme sunucusu ve API yönlendirmesi.
 - `package.json`: Paketler ve çalıştırma komutları.
 
-Faz 3'te log akışı, filtreleme, sayfalama ve kayıt detayları eklenmiştir. Metrik grafikleri ve alarm yönetim ekranı; ardından sürekli simülatör, kapsamlı yük testleri, internette yayınlama ve sunum hazırlanacaktır. Yerel ölçümler başka donanım veya üretim ortamında aynı performansın sağlanacağını kanıtlamaz. API bu aşamada yerel geliştirme için hazırlanmıştır; canlıya alma aşamasında kimlik doğrulama ve erişim sınırları eklenecektir.
+Faz 3'te log akışı, filtreleme, sayfalama, kayıt detayları, CPU/bellek/yanıt süresi seçilebilen grafik, alarm listesi/görüldü işlemi ve alarm kuralı yönetimi eklenmiştir. Faz 4 için sürekli veri simülatörü de eklenmiştir. Yerel ekranların tarayıcıda son görsel/etkileşim kontrolü, kapsamlı yük testleri, internette yayınlama ve teslim belgeleri/sunum kalmaktadır. Yerel ölçümler başka donanım veya üretim ortamında aynı performansın sağlanacağını kanıtlamaz. API bu aşamada yerel geliştirme için hazırlanmıştır; canlıya alma aşamasında kimlik doğrulama ve erişim sınırları eklenecektir.
+
+### Canlı metrik grafikleri
+
+Recharts 3.10.1 ile seçilen servisin ölçümleri çizilir. Başlangıç servisi mevcut örneklerin gönderildiği `payment-service`, metrik CPU'dur. Başka servis veya metrik için formu değiştirip Göster'e basılır. Seçimler şöyledir:
+
+| Ekran | API name | API unit | Dikey eksen |
+| --- | --- | --- | --- |
+| CPU kullanımı | cpu_usage | percent | %0–100 |
+| Bellek kullanımı | memory_usage | percent | %0–100 |
+| Yanıt süresi | response_time | ms | 0'dan başlayan otomatik aralık |
+
+`GET /metrics` ve `GET /stream/metrics` aynı servis/ad/birim ve `limit=100` değerini kullanır. `metrics_changed` bildirimi yeni GET başlatır. Seçim değişince önceki SSE kapatılır ve önceki serinin yanıtı yeni grafikte gösterilmez. Eksen, özet, bilgi kutusu ve tablo aynı seçili birimi kullanır. Yüzde serilerinde 0–100, yanıt süresinde sıfır veya pozitif sonlu sayılar beklenir; 420 ms gibi değerler kabul edilir. Bu fiziksel ölçüm sınırları panelin seçili tür doğrulamasıdır; genel API başka isim/birimli sonlu sayıları da saklayabilir. Manuel yenileme mümkündür. Ekran cihazı kendisi ölçmez; uygulamaların gönderdiği kayıtları gösterir. Kayıtlı son değer ile ölçüm zamanı birlikte yazılır; veri yoksa sıfır üretilmez. Servis içindeki farklı host etiketleri ayrı serilere ayrılmaz; her nokta bir kayıttır.
+
+Grafik soldan sağa olay zamanına göre ilerler. X eksenindeki aralıklar geçen süreyi, Y ekseni seçilen ölçümün birimini gösterir. Başlangıçta son kayıtlı ölçümden geriye bir saatlik kayıtlar gösterilir; 24 saat veya Tüm kayıtlar seçilebilir. Bu pencere tarayıcının şimdiki saatine değil son ölçümün zamanına dayanır; yüklü son 100 kayıt üzerinde uygulanır. Böylece hafta önceki örnekler yeni birkaç dakikalık ölçümleri tek köşeye sıkıştırmaz. Tüm kayıtlar seçilirse gerçek zaman aralıkları nedeniyle bu sıkışma yine mümkündür. Gösterilen kayıt sayısı ve zaman sınırları yazılır. Saat ve tarih iki satırda gösterilir; kısa aralıkta saniye, çok kısa aralıkta milisaniye de yazılır. Dar ekranda daha az eksen etiketi üretilir. Aynı zamandaki kayıtların tüm değerleri bilgi kutusunda listelenir; veri silinmez veya zamanları kaydırılmaz. Tek ölçümde nokta görünür; seçilen pencerenin veri tablosu klavye ile de açılır. Aradaki çizgi sürekli ölçüm yapıldığı anlamına gelmez. Eski 100 kaydın dışındaki geçmiş grafik üzerinden sayfalanmaz; daha eski kayıt varsa açıklama gösterilir. İstek hatasında eldeki önceki ölçümler hata uyarısıyla kalır; servis değişince önceki servisin verisi gösterilmez. Grafik paketi ayrı JavaScript dosyasıyla yüklenir; servis kartları ve log ekranı bu paketten ayrılmıştır.
+
+SSE, kayıtlar commit edildikten sonra normal koşullarda yaklaşık iki saniyelik kontrol aralığında değişikliği fark eder. İki panel akışı (log ve metrik) ayrı bağlantılar ve ayrı DB kontrolleri kullanır. Yüksek izleyici sayıları için ortak bildirim dağıtımı henüz uygulanmamıştır.
+
+### Alarm bildirimleri
+
+Log tablosunun altında Alarmlar bölümü bulunur. Başlangıçta tüm servislerin `status=open` bildirimlerini gösterir. Bunlar İncelenmedi etiketiyle sunulur; durum, altta yatan sorunun hâlâ sürdüğünü kanıtlamaz. Servis adı tam eşleşmesi ve İncelenmeyenler/Görüldü/Tümü filtreleri Uygula düğmesiyle gönderilir. GET /alerts, 20 kayıtlık sayfaları `triggered_at DESC, id DESC` sırasıyla döndürür. Ekran kuralın alarm oluştuğunda kaydedilmiş adını ve açıklamasını kullanır; mevcut kuralı değiştirerek geçmiş bildirimin anlamını değiştirmez.
+
+İlk sayfa, her GET tamamlandıktan yaklaşık 10 saniye sonra yeni GET ile yenilenir. Bu bölüm SSE kullanmaz. Geçmiş sayfalarda otomatik yenileme durur; İlk sayfa yeniden başlatır. Alarmları yenile manuel kontrol sağlar. Her istek 15 saniyeyle sınırlandırılır. Filtre veya sayfa değişince önceki istek iptal edilir; eski sorgunun satırları yeni görünüm altında gösterilmez. İstek hatasında önceki liste hata uyarısıyla kalabilir. Yeni alarmlar ve işaretlemeler offset sayfalarının sırasını değiştirebilir.
+
+Görüldü işaretle, `PATCH /alerts/{id}/acknowledge` çağırır. Başarılı yanıtın id, status ve acknowledged_at alanları doğrulanır, ardından filtreli liste ve has_more yeniden okunur. İncelenmeyenler filtresinde işaretlenen satır çıkar; Görüldü filtresinde sunucunun kaydettiği zamanla bulunur. İşlem sürerken başka değişiklik yapılmaz ve liste sorgusu durdurulur; sonuç mesajına klavye odağı verilir. Aynı alarmın tekrar işaretlenmesi ilk görülme zamanını değiştirmez. Zaman aşımı/iletişim hatasında işlemin kaydedilmiş olabileceği açıklanır ve liste yeniden okunur. Görüldü, sorunun çözülmesi veya kuralın kapanması değildir; çözülme yaşam döngüsü henüz uygulanmamıştır. Boş sonuç da sistemin hatasız olduğu anlamına gelmez.
+
+### Panelde alarm kuralı yönetimi
+
+Alarmlar bölümünün altında Alarm kuralları bulunur. Kural adı, koşul, servis kapsamı, tekrar bekleme süresi ve etkinlik durumu 20 kayıtlık sayfalarla gösterilir. Kuralları yenile manuel GET /alert-rules isteği gönderir; bu liste otomatik yenilenmez. Yeni kural formu POST /alert-rules, Düzenle formu PATCH /alert-rules/{id} kullanır. Kuralın Kapat/Aç düğmesi yalnızca enabled alanını PATCH eder. Kaydedilen yanıt doğrulandıktan sonra liste yeniden okunur. Yeni kural ilk sayfadan sonra yer alıyorsa Sonraki ile bulunabilir; başarı mesajı kaydedilen kimlik ve adı belirtir.
+
+Metrik eşiğinde ölçüm adı, birimi, karşılaştırma ve eşik girilir. CPU, bellek ve yanıt süresi adları önerilir; başka metrik adı/birimi de yazılabilir. Log sayısında seviye, saniye cinsinden zaman penceresi, gt/gte karşılaştırması ve negatif olmayan tam sayı eşik kullanılır. Form tür değişiminde ilgisiz alanları null gönderir. Metrik kuralında kullanılmayan window_seconds alanı 300 gönderilir. Servis boş bırakılırsa null olur ve her servis ayrı değerlendirilir. Tekrar bekleme 0–86400, log penceresi 1–86400 saniyedir. Boş sayılar sıfıra çevrilmez; sıfır bekleme ve kapalı durum korunur.
+
+Kaydetmek veya kuralı açıp kapatmak o kuralın tekrar bekleme durumunu sıfırlar. Yeni ayarlar sonraki kayıtta uygulanır; geçmiş metrik/loglar topluca yeniden değerlendirilmez. Geçmiş alarm açıklamaları değiştirilmez. Kural silme akışı yoktur; yeni alarm üretimini durdurmak için Kapat kullanılır.
+
+Form açıkken ikinci bir kural düzenlemeye geçilmez; Kaydet veya Vazgeç ile çıkılır. İstekler 15 saniyeyle sınırlıdır. Kaydetme sırasında liste isteği ve diğer değişiklikler durdurulur; zaman aşımında işlem kaydedilmiş olabileceği açıklanır. POST otomatik tekrar edilmez. Aynı isim 409, geçersiz alanlar 422, bulunmayan kural 404 mesajıyla gösterilir; form korunur. Çoklu kullanıcılar arasında düzenleme sürümü/çatışma denetimi henüz yoktur; aynı kuralı eşzamanlı düzenlemek önceki değişikliklerin üzerine yazabilir.
+
+## Veri simülatörü
+
+API, Redis, DB ve worker açıkken proje kökünden ayrı bir terminalde çalıştırılır:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/simulate_telemetry.py --duration 60
+```
+
+Varsayılan servis `demo-payment`, senaryo `mixed`, tamamlanan turlar arası bekleme 2 saniyedir. Bir servis için her tur bir log ve üç metrik üretir: cpu_usage/percent, memory_usage/percent, response_time/ms. Log ve metrikler iki batch isteğiyle mevcut API'ye gönderilir. Her turdaki Celery görevlerinin SUCCESS olması beklendikten sonra sonraki tur planlanır; worker yavaşsa hız azalır. Terminal kuyruğa kabul edilen ve worker tarafından onaylanan kayıt sayılarını ayrı raporlar. Bu akış görsel demo içindir; kapasite ölçümü değildir.
+
+Panelde metrik servis alanına `demo-payment` yazıp Göster'e basılır; CPU, bellek veya yanıt süresi seçilir. Log filtresinde de aynı servis adı kullanılabilir. Normal modda CPU %15–70, bellek %25–70, yanıt süresi 30–300 ms aralığındadır. Hatalı turda CPU %90–99, bellek %80–96, yanıt süresi 700–1800 ms ve ERROR log/hata izi gönderilir. Bunlar sentetik verilerdir; cihazın gerçek ölçümleri değildir.
+
+Senaryolar:
+
+- `--scenario normal`: Normal INFO/WARN kayıtları ve ölçümler.
+- `--scenario incident`: Her turda yüksek ölçümler ve ERROR/hata izi.
+- `--scenario mixed`: İlk dört tur normal, her beşinci tur hatalı.
+
+```powershell
+# Ctrl+C ile durdurulana kadar çalışır.
+.\.venv\Scripts\python.exe scripts/simulate_telemetry.py --duration 0
+
+# İki servis; hata senaryosu; isteğe bağlı JSON çalışma özeti.
+.\.venv\Scripts\python.exe scripts/simulate_telemetry.py --services demo-payment demo-orders --scenario incident --duration 30 --report test-results/simulator-run.json
+```
+
+`--seed 42` aynı sürüm/ayarlarla rastgele değerleri tekrar üretir; çalışma kimliği ve güncel zamanlar her çalıştırmada değişir. `--interval` 0.2–60 saniye, `--worker-timeout` 1–120 saniye, en fazla 10 farklı servis desteklenir. Her kaydın tags alanında environment=simulation, source=telemetry-simulator, run_id, sequence, scenario ve host bulunur. Zaman her yeni turda UTC olarak alınır. Birden fazla servis kendi metriği ve loguyla üretilir; gerçek uygulamaya bağlantı yapılmaz.
+
+Süre, API hazır olduktan sonraki üretim aralığını sınırlar; başlamış son turun tamamlanması için worker beklenebilir. Her HTTP isteği en fazla 5 saniye, worker bekleme varsayılan 30 saniyedir. Worker hatası veya süre aşımında yeni üretim durur. Ctrl+C üretimi keser; kuyruktaki işler sonra tamamlanabilir. HTTP 202 yalnızca kabul anlamına gelir; confirmed sayıları SUCCESS görevlerine dayanır. Belirsiz POST sonucu otomatik tekrarlanmaz. Raporun unconfirmed_records alanı yalnızca kimliği alınabilmiş fakat sonucu doğrulanamamış görevleri sayar; yanıtı kaybolmuş POST'un sunucuda işlenip işlenmediğini tek başına kanıtlamaz. successful, planlanan süreyi hatasız ve kesintisiz tamamlama durumudur; Ctrl+C çalışmasında interrupted=true ve çıkış kodu 130 olur.
+
+Normal simülasyon kayıtları panelde incelenmek üzere veritabanında kalır; otomatik silinmez. `--report` verilirse JSON özeti belirtilen dosyanın üzerine yazılır. Bellekte yalnızca son 20 görev kimliği tutulur ve raporda recent_task_ids olarak yer alır; uzun çalışmanın tam görev arşivi değildir. Simülatör veritabanına doğrudan bağlanmaz ve kural ayarlarını değiştirmez. Alarm oluşması mevcut etkin kurallara ve tekrar bekleme süresine bağlıdır. Örneğin varsayılan CPU kuralı hatalı turda tetiklenebilir; 50 üzeri ERROR kuralı için pencerede yeterli ERROR birikmesi gerekir.
+
+Simülatör testleri:
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -p test_simulator.py -v
+```
+
+Sekiz test API modellerine uygun veri, senaryo/seed, yeni zamanlar, CLI sınırları, worker bekleme/süre aşımı, belirsiz POST'u tekrar etmeme, sınırlı çalışma ve Ctrl+C davranışını kapsar. Gerçek servis doğrulama özeti test-results/simulator-smoke.json içindedir; bu QA kayıtları temizlenmiştir. Panel için bırakılan kısa demonun özeti test-results/simulator-demo.json içindedir. Bu adımda kapsamlı yük testi veya yayınlama yapılmamıştır.

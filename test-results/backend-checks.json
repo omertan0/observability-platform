@@ -1,7 +1,7 @@
 {
-  "checked_at_utc": "2026-10-18T19:17:28.901902+00:00",
-  "duration_seconds": 18.16,
-  "tests_run": 24,
+  "checked_at_utc": "2026-10-18T19:43:06.342260+00:00",
+  "duration_seconds": 26.65,
+  "tests_run": 27,
   "successful": true,
   "checks": [
     {
@@ -66,6 +66,18 @@
     },
     {
       "test": "test_backend.BackendChecks.test_16_pooled_connections_reset_row_format",
+      "status": "passed"
+    },
+    {
+      "test": "test_metric_stream.MetricStreamChecks.test_01_commit_filters_queue_and_reconnect",
+      "status": "passed"
+    },
+    {
+      "test": "test_metric_stream.MetricStreamChecks.test_02_window_matches_chart_and_older_rows_do_not_change_it",
+      "status": "passed"
+    },
+    {
+      "test": "test_metric_stream.MetricStreamChecks.test_03_validation_before_stream_headers",
       "status": "passed"
     },
     {

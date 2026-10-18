@@ -22,12 +22,12 @@ load_dotenv()
 from celery_app import celery_app
 from database import get_connection
 from models import LogInput, MetricInput, AlertRuleInput, AlertRulePatch, MAX_BATCH_SIZE
-from queries import page, telemetry_filters, log_filters
+from queries import page, log_filters, metric_filters
 from tasks import process_log, process_metric, process_logs_batch, process_metrics_batch
-from streams import log_events
+from streams import log_events, metric_events
 
 logger = logging.getLogger(__name__)
-app = FastAPI(title="Observability Platform", version="0.4.1",
+app = FastAPI(title="Observability Platform", version="0.5.0",
               description="Log/metrik toplama, filtreleme ve sistem içi alarm API'si.")
 
 Limit = Annotated[int, Query(ge=1, le=200)]
@@ -144,6 +144,18 @@ async def stream_logs(request: Request, service: Service = None,
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
+@app.get("/stream/metrics", tags=["Canlı akış"], response_class=StreamingResponse,
+         responses={200: {"content": {"text/event-stream": {}}}})
+async def stream_metrics(request: Request, service: Service = None,
+                         name: Annotated[str | None, Query(min_length=1, max_length=200)] = None,
+                         unit: Annotated[str | None, Query(min_length=1, max_length=50)] = None,
+                         tags: Annotated[str | None, Query(max_length=4000)] = None,
+                         start: Time = None, end: Time = None, limit: Limit = 100):
+    clauses, values = metric_filters(service, name, unit, tags, start, end)
+    return StreamingResponse(metric_events(request, clauses, values, limit), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
 @app.get("/logs", tags=["Loglar"])
 def list_logs(service: Service = None,
               level: LogLevel | None = None,
@@ -161,11 +173,7 @@ def list_metrics(service: Service = None,
                  unit: Annotated[str | None, Query(min_length=1, max_length=50)] = None,
                  tags: Annotated[str | None, Query(max_length=4000)] = None,
                  start: Time = None, end: Time = None, limit: Limit = 20, offset: Offset = 0):
-    clauses, values = telemetry_filters(service, start, end, tags)
-    for column, value in (("name", name), ("unit", unit)):
-        if value is not None:
-            clauses.append(f"{column} = %s")
-            values.append(value)
+    clauses, values = metric_filters(service, name, unit, tags, start, end)
     return page("SELECT id, timestamp, received_at, service, name, value, unit, tags FROM metrics",
                 clauses, values, "timestamp DESC, id DESC", limit, offset)
 

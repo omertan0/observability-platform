@@ -1,0 +1,36 @@
+{
+  "run_id": "c6fd329630ce404e88f8c11e460d04fa",
+  "started_at_utc": "2026-10-18T20:21:41.278366+00:00",
+  "services": [
+    "qa-simulator-7d45d277c37b40e7ab9cc7ccade6e351"
+  ],
+  "scenario": "incident",
+  "seed": 42,
+  "interval_seconds": 2.0,
+  "requested_duration_seconds": 0.5,
+  "cycles_completed": 1,
+  "accepted_logs": 1,
+  "accepted_metrics": 3,
+  "confirmed_logs": 1,
+  "confirmed_metrics": 3,
+  "failed_records": 0,
+  "finished_at_utc": "2026-10-18T20:21:45.850730+00:00",
+  "elapsed_seconds": 4.572,
+  "unconfirmed_records": 0,
+  "recent_task_ids": [
+    "26804a48-ab4a-46bb-b004-c3ec08a8c358",
+    "bce40008-fdb1-4d07-8f9b-e042a6ffe548"
+  ],
+  "interrupted": false,
+  "error": null,
+  "successful": true,
+  "verification": {
+    "api_queue_worker_saved": true,
+    "log_sse_via_vite": true,
+    "metric_sse_via_vite": true,
+    "all_three_metrics_readable": true,
+    "error_details_present": true,
+    "cpu_and_log_rules_triggered": true,
+    "test_data_cleaned": true
+  }
+}

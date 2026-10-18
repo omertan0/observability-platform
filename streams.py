@@ -1,4 +1,4 @@
-"""Son log listesindeki değişiklikleri SSE üzerinden bildirir."""
+"""Log ve metrik görünümlerindeki değişiklikleri SSE üzerinden bildirir."""
 import asyncio
 from hashlib import sha256
 import json
@@ -32,12 +32,34 @@ def logs_revision(clauses=(), values=()):
     return sha256(signature.encode()).hexdigest()
 
 
+def metrics_revision(clauses=(), values=(), limit=100):
+    where = " WHERE " + " AND ".join(clauses) if clauses else ""
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT timestamp, id FROM metrics" + where
+            + " ORDER BY timestamp DESC, id DESC LIMIT %s",
+            [*values, limit + 1],
+        ).fetchall()
+    signature = "|".join(f"{timestamp.isoformat()}:{record_id}" for timestamp, record_id in rows)
+    return sha256(signature.encode()).hexdigest()
+
+
 def sse_event(name, data, event_id=None):
     identifier = f"id: {event_id}\n" if event_id is not None else ""
     return f"{identifier}event: {name}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
 async def log_events(request, clauses=(), values=()):
+    async for event in revision_events(request, logs_revision, "logs_changed", clauses, values):
+        yield event
+
+
+async def metric_events(request, clauses=(), values=(), limit=100):
+    async for event in revision_events(request, metrics_revision, "metrics_changed", clauses, values, limit):
+        yield event
+
+
+async def revision_events(request, revision_function, event_name, *arguments):
     previous = None
     unavailable = False
     heartbeat_at = monotonic()
@@ -45,16 +67,16 @@ async def log_events(request, clauses=(), values=()):
     while not await request.is_disconnected():
         try:
             # Senkron DB sorgusu, API'nin async döngüsünü durdurmaz.
-            revision = await anyio.to_thread.run_sync(logs_revision, clauses, values)
+            revision = await anyio.to_thread.run_sync(revision_function, *arguments)
         except DATABASE_ERRORS:
             if not unavailable:
-                logger.warning("Canlı log akışı veritabanına erişemiyor")
+                logger.warning("Canlı akış veritabanına erişemiyor: %s", event_name)
                 yield sse_event("stream_status", {"status": "unavailable"})
             unavailable = True
         else:
             # Her bağlantıda ve DB kurtarmasında yeniden eşitleme yapılır.
             if unavailable or revision != previous:
-                yield sse_event("logs_changed", {"revision": revision}, revision)
+                yield sse_event(event_name, {"revision": revision}, revision)
                 previous = revision
             unavailable = False
         if monotonic() - heartbeat_at >= HEARTBEAT_SECONDS:
