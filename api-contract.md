@@ -63,6 +63,19 @@ Kural alanları ve JSON örnekleri README.md içinde açıklanmıştır. Metrik 
 - GET /health: API sürecinin çalıştığını bildirir (200).
 - GET /ready: Veritabanı şeması ve Redis erişimini kontrol eder (200/503); worker durumunu kontrol etmez.
 
+## Canlı log akışı
+
+- GET /stream/logs: `text/event-stream` biçiminde açık SSE bağlantısı.
+- Aynı `service`, `level`, `q`, `tags`, `start`, `end` filtrelerini kabul eder. Uygunsuz filtreler akış başlıkları gönderilmeden önce 422 ile reddedilir. Paneldeki canlı görünüm ilk sayfadır; akış `limit`/`offset` ile sayfalanmaz.
+- `retry: 3000`: Bağlantı kaybında EventSource yeniden bağlanmayı yaklaşık 3 saniye sonra dener.
+- `logs_changed`: İlk bağlantıda ve seçilen filtrelere uyan ilk 21 logun kimlik/zaman listesi değiştiğinde gönderilir. JSON verisi `revision` alanını taşır; `id` aynı özet değeridir. İstemci güncel satırları aynı filtrelerle GET /logs?limit=20&offset=0 üzerinden yeniden alır. Fazladan bir satır, `has_more` durumunun değişmesini de bildirir.
+- `stream_status`: Akış açıkken DB sorgusu başarısızsa `{"status":"unavailable"}` gönderilir. Bu durumda HTTP başlıkları zaten gönderildiğinden HTTP durumu 200 kalır. DB tekrar erişilebilir olunca değişiklik olmasa bile yeni `logs_changed` ile eşitleme yapılır.
+- Yaklaşık 15 saniyede bir `: keepalive` yorumu gönderilir; bu bir uygulama olayı değildir.
+- Sunucu her açık akış için iki saniyede bir veritabanını kontrol eder. Tarayıcı periyodik GET göndermez; değişiklik bildirimi alırsa listeyi tekrar okur. Bu sürüm, çok sayıda panel bağlantısı için ortak bildirim dağıtımı henüz kullanmaz.
+- Yalnızca commit edilmiş kayıtlar görülür. Değişiklik kontrolü tabloyla aynı `timestamp DESC, id DESC` sıralamasındaki filtrelenmiş 20 kayıt ve bir sonraki kayıtla sınırlıdır. Bu pencereye girmeyen eski bir kayıt mevcut görünümü değiştirmez. Filtreler genel son 20 kayıt listesinden bağımsızdır.
+- Yeniden bağlantıda Last-Event-ID geçmiş olayların tekrar oynatılması için kullanılmaz; güncel listeyi yeniden okutan ilk bildirim daima gönderilir. Her log için ayrı olay veya kalıcı olay geçmişi garantisi verilmez.
+- İstemci kapanınca akış biter; iki kontrol arasındaki beklemede DB bağlantısı havuza geri verilmiştir.
+
 Canlı OpenAPI tanımı /openapi.json, deneme ekranı /docs adresindedir.
 
 ## Görev takibi

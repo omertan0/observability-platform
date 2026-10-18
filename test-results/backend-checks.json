@@ -1,7 +1,7 @@
 {
-  "checked_at_utc": "2026-10-11T21:14:29.782945+00:00",
-  "duration_seconds": 6.49,
-  "tests_run": 16,
+  "checked_at_utc": "2026-10-18T19:17:28.901902+00:00",
+  "duration_seconds": 18.16,
+  "tests_run": 24,
   "successful": true,
   "checks": [
     {
@@ -66,6 +66,38 @@
     },
     {
       "test": "test_backend.BackendChecks.test_16_pooled_connections_reset_row_format",
+      "status": "passed"
+    },
+    {
+      "test": "test_stream.StreamChecks.test_01_headers_and_initial_snapshot",
+      "status": "passed"
+    },
+    {
+      "test": "test_stream.StreamChecks.test_02_uncommitted_row_hidden_and_reconnect_resync",
+      "status": "passed"
+    },
+    {
+      "test": "test_stream.StreamChecks.test_03_api_queue_commit_and_notification",
+      "status": "passed"
+    },
+    {
+      "test": "test_stream.StreamChecks.test_06_filtered_stream_outside_global_window_and_pagination",
+      "status": "passed"
+    },
+    {
+      "test": "test_stream.StreamChecks.test_07_twenty_first_row_updates_next_page_flag",
+      "status": "passed"
+    },
+    {
+      "test": "test_stream.StreamChecks.test_08_stream_filter_validation_before_headers",
+      "status": "passed"
+    },
+    {
+      "test": "test_stream.StreamRecoveryChecks.test_04_database_error_recovers_without_duplicate_events",
+      "status": "passed"
+    },
+    {
+      "test": "test_stream.StreamRecoveryChecks.test_05_disconnect_stops_database_checks",
       "status": "passed"
     }
   ]

@@ -5,7 +5,7 @@ from uuid import UUID
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Path, Query, Request, Body
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.exceptions import RequestValidationError
 from kombu.exceptions import OperationalError as BrokerError
 from psycopg import OperationalError
@@ -22,11 +22,12 @@ load_dotenv()
 from celery_app import celery_app
 from database import get_connection
 from models import LogInput, MetricInput, AlertRuleInput, AlertRulePatch, MAX_BATCH_SIZE
-from queries import page, telemetry_filters
+from queries import page, telemetry_filters, log_filters
 from tasks import process_log, process_metric, process_logs_batch, process_metrics_batch
+from streams import log_events
 
 logger = logging.getLogger(__name__)
-app = FastAPI(title="Observability Platform", version="0.3.0",
+app = FastAPI(title="Observability Platform", version="0.4.1",
               description="Log/metrik toplama, filtreleme ve sistem içi alarm API'si.")
 
 Limit = Annotated[int, Query(ge=1, le=200)]
@@ -34,6 +35,8 @@ Offset = Annotated[int, Query(ge=0, le=100000)]
 Service = Annotated[str | None, Query(min_length=1, max_length=200, pattern=r"\S")]
 Time = Annotated[AwareDatetime | None, Query()]
 RecordId = Annotated[int, Path(ge=1, le=9223372036854775807)]
+LogLevel = Literal["INFO", "WARN", "ERROR", "FATAL"]
+LogSearch = Annotated[str | None, Query(min_length=1, max_length=500, pattern=r"\S")]
 
 
 @app.exception_handler(RequestValidationError)
@@ -130,19 +133,24 @@ def task_status(task_id: UUID):
     return response
 
 
+@app.get("/stream/logs", tags=["Canlı akış"], response_class=StreamingResponse,
+         responses={200: {"content": {"text/event-stream": {}}}})
+async def stream_logs(request: Request, service: Service = None,
+                      level: LogLevel | None = None, q: LogSearch = None,
+                      tags: Annotated[str | None, Query(max_length=4000)] = None,
+                      start: Time = None, end: Time = None):
+    clauses, values = log_filters(service, level, q, tags, start, end)
+    return StreamingResponse(log_events(request, clauses, values), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
 @app.get("/logs", tags=["Loglar"])
 def list_logs(service: Service = None,
-              level: Literal["INFO", "WARN", "ERROR", "FATAL"] | None = None,
-              q: Annotated[str | None, Query(min_length=1, max_length=500, pattern=r"\S")] = None,
+              level: LogLevel | None = None,
+              q: LogSearch = None,
               tags: Annotated[str | None, Query(max_length=4000)] = None,
               start: Time = None, end: Time = None, limit: Limit = 20, offset: Offset = 0):
-    clauses, values = telemetry_filters(service, start, end, tags)
-    if level is not None:
-        clauses.append("level = %s")
-        values.append(level)
-    if q is not None:
-        clauses.append("to_tsvector('simple', message) @@ websearch_to_tsquery('simple', %s)")
-        values.append(q)
+    clauses, values = log_filters(service, level, q, tags, start, end)
     return page("SELECT id, timestamp, received_at, service, level, message, stack_trace, tags FROM logs",
                 clauses, values, "timestamp DESC, id DESC", limit, offset)
 

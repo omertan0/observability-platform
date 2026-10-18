@@ -39,7 +39,7 @@ docker compose up -d --build --wait worker
 4. API'yi ayrı terminalde başlatın:
 
 ```powershell
-.\.venv\Scripts\python.exe -m uvicorn main:app --reload
+.\.venv\Scripts\python.exe -m uvicorn main:app --reload --timeout-graceful-shutdown 3
 ```
 
 Swagger: http://127.0.0.1:8000/docs
@@ -48,6 +48,7 @@ Swagger: http://127.0.0.1:8000/docs
 - `GET /ready`: Veritabanı şeması ve Redis erişilebilir mi? Worker sağlığını ölçmez.
 - Worker mesajları: `docker compose logs --tail=40 worker`
 - Kod değiştiğinde worker için yeniden `--build` gerekir; API `--reload` ile yenilenir.
+- `--timeout-graceful-shutdown 3`, geliştirme sırasında açık SSE bağlantılarının yeniden başlatmayı sınırsız bekletmesini önler. API yeniden açılırken panel kısa süre yeniden bağlanma durumu gösterebilir.
 
 ## Veri gönderme
 
@@ -198,7 +199,7 @@ Sınırlı yerel yük ölçümü:
 
 ### React paneli
 
-Panel `frontend` klasöründe React ve Vite ile çalışır. Node.js 24 kuruludur. Ekran API, veritabanı ve Redis bağlantısını kontrol eder ve olay zamanına göre en yeni 20 logu tablo olarak gösterir. Grafikler ve SSE henüz eklenmemiştir.
+Panel `frontend` klasöründe React ve Vite ile çalışır. Node.js 24 kuruludur. Ekran API, veritabanı ve Redis bağlantısını kontrol eder ve logları filtreleyip 20 kayıtlık sayfalarla gösterir. İlk sayfa SSE ile otomatik yenilenir. Metrik grafikleri henüz eklenmemiştir.
 
 Proje kökünden ayrı bir terminalde:
 
@@ -212,9 +213,21 @@ Panel: http://127.0.0.1:5173
 
 `Bağlantıyı kontrol et` düğmesi `/api/ready` isteği gönderir. Vite geliştirme sunucusu bunu `http://127.0.0.1:8000/ready` adresine iletir. Backend ve Docker servisleri yukarıdaki komutlarla ayrıca çalıştırılmalıdır. Bu kontrol worker sağlığını ölçmez.
 
-Log tablosu sayfa açıldığında `GET /api/logs?limit=20` isteğiyle yüklenir. Zaman, servis, seviye ve mesaj alanlarını gösterir. `Logları yenile` düğmesi son kayıtları tekrar getirir. İstek hataları ile boş sonuç ayrı gösterilir; henüz otomatik canlı yenileme yoktur. Saatler tarayıcının yerel saat diliminde gösterilir.
+Log tablosu sayfa açıldığında `GET /api/logs?limit=20&offset=0` isteğiyle yüklenir. Zaman, servis, seviye ve mesaj alanlarını gösterir. `Logları yenile` düğmesi mevcut sayfayı tekrar getirir. İstek hataları ile boş sonuç ayrı gösterilir. Saatler tarayıcının yerel saat diliminde gösterilir.
+
+Her satırdaki `Detay` düğmesi tam mesajı, servis/seviyeyi, olay ve platform alım zamanını, JSON etiketlerini ve varsa stack_trace bilgisini açar. Ayrıntılar mevcut liste yanıtından alınır; ek API isteği yapılmaz. Tabloda uzun mesajların üç satırlık önizlemesi gösterilir; detayda tam metin yer alır. Pencere `Kapat` veya Escape ile kapanır. İncelenen kayıt, arka planda yeni loglar gelse de seçildiği hâliyle kalır. Kayıtla hata izi gönderilmemişse bu durum açıklanır.
+
+Servis adı tam eşleşmesi, log seviyesi, mesajda kelime ve başlangıç/bitiş zamanı filtreleri vardır. Alanları değiştirmek sorguyu hemen çalıştırmaz; `Uygula` filtreleri gönderir ve ilk sayfaya döner. `Temizle` filtreleri kaldırır. Tarihler yerel saatten UTC'ye dönüştürülür; başlangıcın bitişten sonra olması isteğe dönüşmeden engellenir. Sunucu da aynı zaman aralığını doğrular.
+
+`Önceki` ve `Sonraki`, API'nin offset/has_more/next_offset bilgilerini kullanır. Sonraki sayfa yoksa düğme pasiftir. İlk sayfa dışındayken SSE bağlantısı kapatılır ve canlı yenileme duraklatılır; `İlk sayfa / canlı` bağlantıyı yeniden açar. Offset sayfaları sabit bir arşiv görüntüsü değildir; arada gelen kayıtlar sayfa sırasını değiştirebilir. API'nin 100000 offset sınırında zaman aralığını daraltma açıklaması gösterilir.
+
+`EventSource('/api/stream/logs?...')` aynı uygulanmış filtrelerle açık bir SSE bağlantısı kurar. Backend, filtreli ilk 20 kaydın ve has_more için bir sonraki kaydın kimlik/zaman listesini iki saniyede bir kontrol eder; değişiklikte `logs_changed` olayı gönderir ve panel listeyi yeniden okur. Dolayısıyla worker'ın kaydı commit etmesinden sonra normal koşullarda yaklaşık iki saniye içinde değişiklik fark edilir. Kuyruk beklemesi ve yavaş bağlantılar bu süreye eklenir. Panelde `Canlı akış açık` veya yeniden bağlanma/DB bekleme durumu gösterilir. Bağlantı geri gelince güncel liste yeniden okunur. Detaylar api-contract.md içinde açıklanmıştır.
+
+Bu sürümde kontrol her açık SSE bağlantısı için yapılır. Çok sayıda izleyici için ortak değişiklik izleyicisi veya bildirim dağıtımı kapasite aşamasında değerlendirilmelidir. SSE geçmişteki her logu sırayla teslim eden kalıcı bir olay kuyruğu değildir; panelin son 20 kayıt görünümünü güncel tutar.
 
 Derleme kontrolü: `npm.cmd run build`. Çıktı `frontend/dist` klasörüne yazılır. `node_modules`, npm önbelleği ve `dist` Git'e eklenmez; `package-lock.json` eklenir. Vite proxy ayarı geliştirme içindir; canlı dağıtımda `/api` yönlendirmesi ayrıca yapılandırılacaktır.
+
+`frontend` klasöründe `npm.cmd test`, sorgu oluşturma, URL kodlama, yerel zaman/UTC dönüşümü, geçersiz aralıklar ve sayfa sınırlarını denetler. Bunlar tarayıcıda görsel/tıklama testleri değildir.
 
 Panelin dosyaları:
 
@@ -222,8 +235,12 @@ Panelin dosyaları:
 - `src/main.jsx`: React uygulamasını HTML'deki `root` alanına bağlar.
 - `src/App.jsx`: Servis kartları ve bağlantı kontrolü.
 - `src/LogTable.jsx`: Gerçek API kayıtlarını yükleyen, durumları ve log tablosunu gösteren bileşen.
+- `src/LogFilters.jsx`: Uygulanmadan önce düzenlenebilen filtre formu.
+- `src/LogDetails.jsx`: Seçilen kaydın tam mesaj, zaman, etiket ve hata izini gösteren detay penceresi.
+- `src/logQuery.js`: Filtre ve sayfa sorgularını oluşturur; zaman dönüşümü ve aralık kontrolü yapar.
+- `../streams.py`: Veritabanındaki liste değişikliklerini SSE ile bildiren backend modülü.
 - `src/styles.css`: Koyu tema ve küçük ekran düzeni.
 - `vite.config.js`: Geliştirme sunucusu ve API yönlendirmesi.
 - `package.json`: Paketler ve çalıştırma komutları.
 
-Faz 2 backend geliştirmesinden sonra React paneli, SSE canlı akışı, sürekli simülatör ve kapsamlı yük testleri, internette yayınlama ve sunum hazırlanacaktır. Yerel ölçümler başka donanım veya üretim ortamında aynı performansın sağlanacağını kanıtlamaz. API bu aşamada yerel geliştirme için hazırlanmıştır; canlıya alma aşamasında kimlik doğrulama ve erişim sınırları eklenecektir.
+Faz 3'te log akışı, filtreleme, sayfalama ve kayıt detayları eklenmiştir. Metrik grafikleri ve alarm yönetim ekranı; ardından sürekli simülatör, kapsamlı yük testleri, internette yayınlama ve sunum hazırlanacaktır. Yerel ölçümler başka donanım veya üretim ortamında aynı performansın sağlanacağını kanıtlamaz. API bu aşamada yerel geliştirme için hazırlanmıştır; canlıya alma aşamasında kimlik doğrulama ve erişim sınırları eklenecektir.
