@@ -196,4 +196,34 @@ Sınırlı yerel yük ölçümü:
 
 ## Sonraki aşama
 
+### React paneli
+
+Panel `frontend` klasöründe React ve Vite ile çalışır. Node.js 24 kuruludur. Ekran API, veritabanı ve Redis bağlantısını kontrol eder ve olay zamanına göre en yeni 20 logu tablo olarak gösterir. Grafikler ve SSE henüz eklenmemiştir.
+
+Proje kökünden ayrı bir terminalde:
+
+```powershell
+cd frontend
+npm.cmd ci
+npm.cmd run dev
+```
+
+Panel: http://127.0.0.1:5173
+
+`Bağlantıyı kontrol et` düğmesi `/api/ready` isteği gönderir. Vite geliştirme sunucusu bunu `http://127.0.0.1:8000/ready` adresine iletir. Backend ve Docker servisleri yukarıdaki komutlarla ayrıca çalıştırılmalıdır. Bu kontrol worker sağlığını ölçmez.
+
+Log tablosu sayfa açıldığında `GET /api/logs?limit=20` isteğiyle yüklenir. Zaman, servis, seviye ve mesaj alanlarını gösterir. `Logları yenile` düğmesi son kayıtları tekrar getirir. İstek hataları ile boş sonuç ayrı gösterilir; henüz otomatik canlı yenileme yoktur. Saatler tarayıcının yerel saat diliminde gösterilir.
+
+Derleme kontrolü: `npm.cmd run build`. Çıktı `frontend/dist` klasörüne yazılır. `node_modules`, npm önbelleği ve `dist` Git'e eklenmez; `package-lock.json` eklenir. Vite proxy ayarı geliştirme içindir; canlı dağıtımda `/api` yönlendirmesi ayrıca yapılandırılacaktır.
+
+Panelin dosyaları:
+
+- `index.html`: React ekranının yerleşeceği HTML belgesi.
+- `src/main.jsx`: React uygulamasını HTML'deki `root` alanına bağlar.
+- `src/App.jsx`: Servis kartları ve bağlantı kontrolü.
+- `src/LogTable.jsx`: Gerçek API kayıtlarını yükleyen, durumları ve log tablosunu gösteren bileşen.
+- `src/styles.css`: Koyu tema ve küçük ekran düzeni.
+- `vite.config.js`: Geliştirme sunucusu ve API yönlendirmesi.
+- `package.json`: Paketler ve çalıştırma komutları.
+
 Faz 2 backend geliştirmesinden sonra React paneli, SSE canlı akışı, sürekli simülatör ve kapsamlı yük testleri, internette yayınlama ve sunum hazırlanacaktır. Yerel ölçümler başka donanım veya üretim ortamında aynı performansın sağlanacağını kanıtlamaz. API bu aşamada yerel geliştirme için hazırlanmıştır; canlıya alma aşamasında kimlik doğrulama ve erişim sınırları eklenecektir.
