@@ -123,6 +123,12 @@ class SimulatorChecks(unittest.TestCase):
             self.assertEqual(data['confirmed_logs'], 0)
             self.assertFalse(data['successful'])
 
+    def test_missing_ingest_key_stops_before_http_request(self):
+        with patch.object(sim, 'ingestion_headers', side_effect=ValueError('missing')), patch.object(sim, 'urlopen') as opened:
+            with self.assertRaises(sim.SimulatorError):
+                sim.ApiClient('http://127.0.0.1:8000').request('GET', '/ready')
+            opened.assert_not_called()
+
     def test_ctrl_c_stops_without_resending_and_reports_pending_records(self):
         with TemporaryDirectory() as directory, patch.object(sim, 'ApiClient') as client_type, redirect_stdout(io.StringIO()):
             client = client_type.return_value

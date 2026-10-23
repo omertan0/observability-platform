@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { apiFetch } from './apiClient.js'
 import { ALERT_PAGE_SIZE, ALERT_MAX_OFFSET, EMPTY_ALERT_FILTERS, buildAlertFilters, buildAlertPageQuery, validateAlertPage, validateAcknowledgment } from './alertQuery.js'
 
 const EMPTY_RESULT = { query: null, items: [], loading: true, error: '', hasMore: false, nextOffset: null, updatedAt: null }
@@ -41,7 +42,7 @@ export default function AlertsPanel() {
       requestTimer = setTimeout(() => controller.abort(), 15000)
       setResult((previous) => ({ ...(previous.query === query ? previous : EMPTY_RESULT), query, loading: true, error: '' }))
       try {
-        const response = await fetch(`/api/alerts?${query}`, { signal: controller.signal })
+        const response = await apiFetch(`/api/alerts?${query}`, { signal: controller.signal })
         if (!response.ok) throw new Error(response.status === 503
           ? 'Veritabanına erişilemiyor. Servisleri kontrol edip yeniden dene.'
           : `Alarmlar alınamadı (HTTP ${response.status}). Yeniden dene.`)
@@ -85,7 +86,7 @@ export default function AlertsPanel() {
     setNotice(null)
     const timeout = setTimeout(() => controller.abort(), 15000)
     try {
-      const response = await fetch(`/api/alerts/${alert.id}/acknowledge`, { method: 'PATCH', signal: controller.signal })
+      const response = await apiFetch(`/api/alerts/${alert.id}/acknowledge`, { method: 'PATCH', signal: controller.signal })
       if (!response.ok) throw new Error(response.status === 404
         ? 'Bu alarm artık bulunamıyor. Listeyi yenile.'
         : `İşlem doğrulanamadı (HTTP ${response.status}). Listeyi yenileyerek alarmın durumunu kontrol et.`)

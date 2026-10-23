@@ -1,0 +1,75 @@
+{
+  "checked_at_utc": "2026-10-23T23:07:50.627165+00:00",
+  "label": "phase4-20261024-single-r2",
+  "requested_records": 1000,
+  "accepted_records": 1000,
+  "service": "qa-load-b06995ba2def44e595f77fe7c7a565cb",
+  "saved_records": 1000,
+  "saved_logs": 500,
+  "saved_metrics": 500,
+  "processed_tasks": 1000,
+  "receipt_records": 1000,
+  "task_states": {
+    "SUCCESS": 1000
+  },
+  "attempted_records": 1000,
+  "not_attempted_records": 0,
+  "http_requests": 1000,
+  "http_errors": [],
+  "http_error_rate_percent": 0.0,
+  "concurrency": 8,
+  "batch_size": 1,
+  "acceptance_seconds": 1.577,
+  "target_records_per_second": null,
+  "total_seconds": 2.655,
+  "queue_drain_seconds": 1.078,
+  "worker_confirmed_seconds": 3.538,
+  "records_per_second": 376.64,
+  "http_p50_ms": 9.8,
+  "http_p95_ms": 29.97,
+  "http_p99_ms": 36.03,
+  "queue_peak_samples": 395,
+  "queue_samples": [
+    {
+      "seconds": 0.003,
+      "waiting_tasks": 0
+    },
+    {
+      "seconds": 0.515,
+      "waiting_tasks": 117
+    },
+    {
+      "seconds": 1.021,
+      "waiting_tasks": 247
+    },
+    {
+      "seconds": 1.529,
+      "waiting_tasks": 395
+    },
+    {
+      "seconds": 2.045,
+      "waiting_tasks": 193
+    },
+    {
+      "seconds": 2.556,
+      "waiting_tasks": 0
+    },
+    {
+      "seconds": 3.066,
+      "waiting_tasks": 0
+    }
+  ],
+  "queue_monitor_errors": [],
+  "queue_scope": "Tüm yerel celery kuyruğundaki bekleyen görevler; çalışan görevler dahil değil.",
+  "alert_count": 0,
+  "successful": true,
+  "environment": {
+    "platform": "Windows-11-10.0.26300-SP0",
+    "python": "3.14.3",
+    "logical_cpus": 24
+  },
+  "timing_note": "Ön hazırlık ve temizlik hariç. DB bitişi gönderim sonrası kontrol edilir. HTTP yüzdelikleri başarılı kabul yanıtlarına aittir; nearest-rank kullanılır.",
+  "workload": "Half INFO logs, half cpu_usage/percent=70 metrics; local machine, single run.",
+  "data_cleaned": true,
+  "cleanup_error": null
+}

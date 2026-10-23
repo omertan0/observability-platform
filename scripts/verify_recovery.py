@@ -18,6 +18,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from dotenv import load_dotenv
 load_dotenv(ROOT / ".env")
+from client_access import AdminClient
+urlopen = AdminClient().open
 from celery_app import celery_app
 from database import get_connection
 from tasks import process_metric

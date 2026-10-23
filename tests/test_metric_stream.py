@@ -6,7 +6,8 @@ from urllib.parse import urlencode
 from urllib.request import urlopen
 from uuid import uuid4
 
-from test_backend import BASE_URL, request, wait_for
+from test_backend import BASE_URL, request, wait_for, admin_client
+urlopen = admin_client.open
 from test_stream import next_event
 from celery_app import celery_app
 from database import get_connection

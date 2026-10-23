@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import LogFilters from './LogFilters.jsx'
 import LogDetails from './LogDetails.jsx'
+import { apiFetch, notifySessionExpired } from './apiClient.js'
 import { buildLogFilters, buildLogPageQuery, EMPTY_FILTERS, MAX_OFFSET, PAGE_SIZE } from './logQuery.js'
 
 const EMPTY_RESULT = {
@@ -52,6 +53,7 @@ export default function LogTable() {
       setRefreshKey((value) => value + 1)
     })
     stream.addEventListener('stream_status', () => { if (active) setStreamStatus('unavailable') })
+    stream.addEventListener('auth_expired', () => { if (active) { stream.close(); notifySessionExpired() } })
     stream.onerror = () => {
       if (active) setStreamStatus(stream.readyState === EventSource.CLOSED ? 'closed' : 'reconnecting')
     }
@@ -72,7 +74,7 @@ export default function LogTable() {
         query: pageQuery, loading: true, error: '',
       }))
       try {
-        const response = await fetch(`/api/logs?${pageQuery}`, { signal: controller.signal })
+        const response = await apiFetch(`/api/logs?${pageQuery}`, { signal: controller.signal })
         if (!response.ok) {
           throw new Error(response.status === 503
             ? 'Veritabanına şu anda erişilemiyor. Servisleri kontrol edip yeniden dene.'

@@ -1,0 +1,61 @@
+{
+  "checked_at_utc": "2026-10-23T23:12:17.240314+00:00",
+  "runs": 10,
+  "requested_records": 38100,
+  "saved_records": 38100,
+  "http_requests": 3360,
+  "all_runs_successful_and_cleaned": true,
+  "ready": {
+    "status": "ready",
+    "checks": {
+      "database": true,
+      "redis": true
+    }
+  },
+  "remaining_test_rows": {
+    "logs": 0,
+    "metrics": 0,
+    "alerts": 0,
+    "alert_states": 0
+  },
+  "existing_service_rows_after_tests": {
+    "payment-service": {
+      "logs": 1,
+      "metrics": 7,
+      "alerts": 2
+    },
+    "demo-payment": {
+      "logs": 10,
+      "metrics": 30,
+      "alerts": 1
+    }
+  },
+  "waiting_queue_after_tests": 0,
+  "workers": {
+    "celery@828777fcbf5f": {
+      "concurrency": 2
+    }
+  },
+  "containers": [
+    {
+      "Service": "db",
+      "Image": "timescale/timescaledb:latest-pg17",
+      "State": "running",
+      "Health": "healthy"
+    },
+    {
+      "Service": "redis",
+      "Image": "redis:7.4-alpine",
+      "State": "running",
+      "Health": "healthy"
+    },
+    {
+      "Service": "worker",
+      "Image": "artersoft-worker",
+      "State": "running",
+      "Health": ""
+    }
+  ],
+  "scope": "Only the ten phase4-20261024 load runs; existing service counts are an after-test observation, not a before/after comparison.",
+  "successful": true
+}

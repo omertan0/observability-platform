@@ -1,0 +1,87 @@
+{
+  "checked_at_utc": "2026-10-23T23:09:18.724968+00:00",
+  "label": "phase4-20261024-alerting",
+  "requested_records": 10000,
+  "accepted_records": 10000,
+  "service": "qa-load-2d24bcb38803445ea498460b6df48f8a",
+  "saved_records": 10000,
+  "saved_logs": 5000,
+  "saved_metrics": 5000,
+  "processed_tasks": 100,
+  "receipt_records": 10000,
+  "task_states": {
+    "SUCCESS": 100
+  },
+  "attempted_records": 10000,
+  "not_attempted_records": 0,
+  "http_requests": 100,
+  "http_errors": [],
+  "http_error_rate_percent": 0.0,
+  "concurrency": 8,
+  "batch_size": 100,
+  "acceptance_seconds": 0.311,
+  "target_records_per_second": null,
+  "total_seconds": 4.911,
+  "queue_drain_seconds": 4.6,
+  "worker_confirmed_seconds": 4.989,
+  "records_per_second": 2036.12,
+  "http_p50_ms": 19.53,
+  "http_p95_ms": 58.77,
+  "http_p99_ms": 72.0,
+  "queue_peak_samples": 88,
+  "queue_samples": [
+    {
+      "seconds": 0.001,
+      "waiting_tasks": 0
+    },
+    {
+      "seconds": 0.511,
+      "waiting_tasks": 88
+    },
+    {
+      "seconds": 1.027,
+      "waiting_tasks": 75
+    },
+    {
+      "seconds": 1.543,
+      "waiting_tasks": 64
+    },
+    {
+      "seconds": 2.054,
+      "waiting_tasks": 50
+    },
+    {
+      "seconds": 2.567,
+      "waiting_tasks": 39
+    },
+    {
+      "seconds": 3.094,
+      "waiting_tasks": 30
+    },
+    {
+      "seconds": 3.609,
+      "waiting_tasks": 17
+    },
+    {
+      "seconds": 4.121,
+      "waiting_tasks": 8
+    },
+    {
+      "seconds": 4.623,
+      "waiting_tasks": 1
+    }
+  ],
+  "queue_monitor_errors": [],
+  "queue_scope": "Tüm yerel celery kuyruğundaki bekleyen görevler; çalışan görevler dahil değil.",
+  "alert_count": 2,
+  "successful": true,
+  "environment": {
+    "platform": "Windows-11-10.0.26300-SP0",
+    "python": "3.14.3",
+    "logical_cpus": 24
+  },
+  "timing_note": "Ön hazırlık ve temizlik hariç. DB bitişi gönderim sonrası kontrol edilir. HTTP yüzdelikleri başarılı kabul yanıtlarına aittir; nearest-rank kullanılır.",
+  "workload": "Half ERROR logs, half cpu_usage/percent=90 metrics; local machine, single run.",
+  "data_cleaned": true,
+  "cleanup_error": null
+}

@@ -1,0 +1,10 @@
+{
+  "checked_at_utc": "2026-10-23T23:41:15.926103+00:00",
+  "tests_run": 52,
+  "failures": [],
+  "errors": [],
+  "skipped": [],
+  "seconds": 31.909,
+  "successful": true,
+  "scope": "Access, backend, streams, simulator and load-runner regression checks; own test services cleaned by the suites."
+}

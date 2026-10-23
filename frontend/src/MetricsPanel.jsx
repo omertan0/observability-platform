@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { apiFetch, notifySessionExpired } from './apiClient.js'
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { buildMetricQuery, METRIC_LIMIT, METRIC_WINDOWS, METRIC_TYPES, metricType, formatMetricValue, metricPoints, metricWindow, metricTicks, metricTickLabel, timeDomain } from './metricQuery.js'
 
@@ -67,6 +68,7 @@ export default function MetricsPanel() {
       setRefreshKey((value) => value + 1)
     })
     stream.addEventListener('stream_status', () => { if (active) setStreamStatus('unavailable') })
+    stream.addEventListener('auth_expired', () => { if (active) { stream.close(); notifySessionExpired() } })
     stream.onerror = () => {
       if (active) setStreamStatus(stream.readyState === EventSource.CLOSED ? 'closed' : 'reconnecting')
     }
@@ -80,7 +82,7 @@ export default function MetricsPanel() {
     async function loadMetrics() {
       setResult((previous) => ({ ...(previous.query === query ? previous : EMPTY_RESULT), query, loading: true, error: '' }))
       try {
-        const response = await fetch(`/api/metrics?${query}`, { signal: controller.signal })
+        const response = await apiFetch(`/api/metrics?${query}`, { signal: controller.signal })
         if (!response.ok) throw new Error(`Metrikler alınamadı (HTTP ${response.status}). Servisleri kontrol edip yeniden dene.`)
         const data = await response.json()
         const receivedPoints = metricPoints(data, service, metricKey)

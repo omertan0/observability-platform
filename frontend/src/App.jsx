@@ -2,10 +2,11 @@ import { lazy, Suspense, useState } from 'react'
 import LogTable from './LogTable.jsx'
 import AlertsPanel from './AlertsPanel.jsx'
 import RulesPanel from './RulesPanel.jsx'
+import { apiFetch } from './apiClient.js'
 
 const MetricsPanel = lazy(() => import('./MetricsPanel.jsx'))
 
-export default function App() {
+export default function App({ user, onLogout, signingOut = false }) {
   const [checking, setChecking] = useState(false)
   const [checks, setChecks] = useState(null)
   const [message, setMessage] = useState('Bağlantı henüz kontrol edilmedi.')
@@ -16,7 +17,7 @@ export default function App() {
     setChecks(null)
     setMessage('Servislerin yanıtı bekleniyor…')
     try {
-      const response = await fetch('/api/ready', { signal: AbortSignal.timeout(15000) })
+      const response = await apiFetch('/api/ready', { signal: AbortSignal.timeout(15000) })
       const data = await response.json()
       if (typeof data.checks?.database !== 'boolean' || typeof data.checks?.redis !== 'boolean') {
         throw new Error('Beklenmeyen API yanıtı')
@@ -45,7 +46,10 @@ export default function App() {
           <span className="brand-icon" aria-hidden="true">▥</span>
           <span>observability<span className="brand-dot">.</span></span>
         </a>
-        <span className="environment">Yerel ortam</span>
+        <div className="session-tools">
+          <span className="environment">{user || 'Yerel ortam'}</span>
+          {onLogout && <button className="secondary-button" onClick={onLogout} disabled={signingOut}>{signingOut ? 'Çıkılıyor…' : 'Çıkış yap'}</button>}
+        </div>
       </header>
 
       <main>

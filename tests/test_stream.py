@@ -11,7 +11,8 @@ from urllib.request import Request, urlopen
 from urllib.parse import urlencode
 from uuid import uuid4
 
-from test_backend import BASE_URL, request
+from test_backend import BASE_URL, request, admin_client
+urlopen = admin_client.open
 from celery_app import celery_app
 from database import get_connection
 from psycopg import OperationalError

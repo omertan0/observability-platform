@@ -22,8 +22,11 @@ load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 from database import get_connection
 from tasks import save_record, save_records
 from celery_app import celery_app
+from client_access import AdminClient
 
 BASE_URL = os.getenv("TEST_API_URL", "http://127.0.0.1:8000")
+admin_client = AdminClient(BASE_URL)
+urlopen = admin_client.open
 
 
 def request(method, path, body=None, params=None):
@@ -36,7 +39,8 @@ def request(method, path, body=None, params=None):
         with urlopen(req, timeout=15) as response:
             return response.status, json.load(response)
     except HTTPError as exc:
-        return exc.code, json.load(exc)
+        with exc:
+            return exc.code, json.load(exc)
 
 
 def wait_for(predicate, timeout=20):

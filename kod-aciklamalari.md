@@ -1057,3 +1057,276 @@ DetailTime, zamanı yerel saatle okunabilir biçimde gösterir; altta API'den ge
 Stack trace, hatanın oluşmasına kadar kodda hangi çağrılardan geçildiğini anlatan hata izidir. Bu alan null veya boşsa, bu kayıtla hata izi gönderilmediği açıklanır; bu açıklama uygulamada hata olmadığı anlamına gelmez.
 
 Tablodaki üç satır sınırı yalnızca CSS önizlemesidir. Veri kesilmez; detay penceresine tam kayıt aktarılır.
+
+
+## Faz 3 canlı CPU grafiği — adım adım
+
+Şemadaki yerimiz: uygulama → POST /metrics → Redis → worker → veritabanı → GET /metrics ve SSE → React grafiği. Önceki kayıt akışını değiştirmedik; arşivdeki sayıları okunabilir bir grafiğe bağladık.
+
+### 1. metricQuery.js: hangi kayıtları istiyoruz?
+
+METRIC_LIMIT = 100, grafikte en fazla kaç kayıt gösterileceğidir. CPU_NAME = 'cpu_usage' ölçümün adı, CPU_UNIT = 'percent' birimidir. buildMetricQuery(service), servis adını trim ile baş/son boşluklardan temizler; boş veya çok uzun adı reddeder. URLSearchParams bu dört değeri HTTP sorgusuna çevirir. Örneğin service=payment-service&name=cpu_usage&unit=percent&limit=100 isteği, yalnızca o servisin CPU yüzdesi kayıtlarını ister.
+
+metricPoints(data, service), API yanıtının beklenen sayfa olduğunu ve her kaydın aynı servis/ad/birime ait olduğunu kontrol eder. Date.parse(timestamp), zamanı milisaniye cinsinden bir sayıya çevirir; bu sayı X eksenine yerleştirilebilir. value yüzde değeridir ve 0–100 aralığında olmalıdır. API satırları yeni → eski döndürür; grafik eski → yeni sıralar. API yanıtı yerinde değiştirilmez. timeDomain, ilk ve son noktanın zamanını eksen sınırı yapar. Tek zaman varsa iki yana 30 saniyelik boşluk ekler; yeni veya sahte ölçüm üretmez.
+
+### 2. MetricsPanel.jsx: ekrandaki bilgiyi saklamak
+
+useState('payment-service'), başlangıçtaki örnek servis adını tutar. draftService kutuda yazılan değerdir; service grafikte uygulanmış servistir. Göster düğmesi applyService çağırır. event.preventDefault(), formun tüm sayfayı yenilemesini engeller. buildMetricQuery girdiyi doğrular; setService yeni servisi uygular. Sonuçlar query bilgisiyle birlikte saklanır; yeni servise geçince eski servisin grafiği görünmez.
+
+result.points grafiğin noktalarıdır. loading istek sürdüğünü, error başarısızlığı, hasMore daha eski kayıtların bulunduğunu, updatedAt son başarılı GET zamanını tutar. latest = points.at(-1), olay zamanına göre son kayıt demektir. Sıfır yüzde de geçerli ölçümdür; boş sonuçla aynı değildir.
+
+### 3. GET ile ölçümleri yüklemek
+
+useEffect, query veya refreshKey değiştiğinde çalışır. fetch('/api/metrics?' + query), backend'den kayıtları ister. await response.json(), JSON yanıtını JavaScript nesnesine çevirir. metricPoints bunu grafik noktalarına dönüştürür. setResult bu noktaları React belleğine koyunca ekran yeniden çizilir.
+
+AbortController, servis değiştiğinde önceki isteği iptal eder. 15 saniyelik setTimeout istek süresini sınırlar. active bayrağı kapanmış veya başka sorguya geçmiş bileşene eski yanıtın yazılmasını engeller. Aynı sorgu yenilenirken eldeki noktalar korunur; istek başarısızsa önceki verinin güncelliğinin doğrulanamadığı açıklanır.
+
+### 4. SSE ile yeni kayıttan haberdar olmak
+
+new EventSource('/api/stream/metrics?' + query), açık bildirim bağlantısını kurar. metrics_changed gelince setRefreshKey(value => value + 1) çağrılır. refreshKey değişikliği GET effect'ini yeniden çalıştırır. Bildirimin içinde tüm grafik yoktur; bildirim yeni veriyi istememizi sağlar. Servis değişince effect temizliği stream.close() ile eski bağlantıyı kapatır. DB erişim hatası veya yeniden bağlanma ekranda ayrıca gösterilir. Canlı bağlantının açık olması, uygulamanın o anda yeni CPU örneği gönderdiğini kanıtlamaz; ölçüm zamanına bakılmalıdır.
+
+### 5. Recharts grafiği nasıl çiziyor?
+
+ResponsiveContainer, grafiği içinde bulunduğu kutunun genişliğine uyarlar. LineChart data={points}, noktaları çizim bileşenine verir. XAxis dataKey='time' type='number' scale='time', her noktanın gerçek zamanını yatay konuma çevirir. Böylece iki dakika arayla gelen iki kayıt ile iki gün arayla gelen iki kayıt aynı aralığa yerleştirilmez.
+
+YAxis domain={[0, 100]}, yüzde ölçeğini belirler. Line dataKey='value', noktanın CPU sayısını dikey konuma koyar; type='linear' noktaları düz çizgilerle birleştirir. isAnimationActive={false}, canlı güncellemelerde çizgi animasyonunu kapatır. Tooltip, noktanın zamanını, değerini ve servisini gösterir. Tek nokta da görünür. Çizgi, aradaki zamanlarda ölçüm varmış anlamına gelmez. Altındaki details/table aynı sayıları klavye ile okunabilir biçimde sunar. Kayıtlar hizmet düzeyinde filtrelenir; farklı host etiketlerine göre ayrı çizgi veya ortalama oluşturulmaz.
+
+### 6. Backend: ortak filtre ve bildirim döngüsü
+
+queries.metric_filters, servis/zaman/etiket filtrelerine name ve unit eşitliğini ekler. Hem GET /metrics hem GET /stream/metrics bu fonksiyonu çağırır. Kullanıcı değerleri SQL metnine eklenmez; sorgu parametresi olarak gönderilir.
+
+streams.metrics_revision, filtreli son limit+1 satırın zaman ve kimliğinden özet çıkarır. Özet değişirse metrics_changed gönderilir. Fazladan kayıt, grafiğin dışında daha eski kayıt var mı bilgisini günceller. Kimlik/zaman listesinde bulunmayan eski bir kayıt mevcut pencereyi değiştirmez. Kayıtlar eklenerek işlendiği için değer değişiklikleri şu an ayrı izlenmez; gelecekte düzenleme API'si yapılırsa bu özet de genişletilmelidir.
+
+revision_events, log ve metrik için ortak açık bağlantı döngüsüdür. İki saniyede bir kısa DB sorgusu yapar, özet değiştiyse haber verir, beklerken DB bağlantısını havuza geri bırakır. İlk bağlantıda ve DB kurtarmasında da güncel görüntüyü yeniden okutacak bildirim gönderir. Çok sayıda kullanıcı için ortak dağıtım sistemi henüz yoktur; her açık akış ayrı kontrol yapar.
+
+### 7. App.jsx ve paketler
+
+Recharts 3.10.1 package.json/package-lock.json dosyalarına eklendi. lazy(() => import('./MetricsPanel.jsx')), grafik kodunu ayrı JavaScript parçasında yükler. Suspense, bu dosya yüklenene kadar kısa bir hazırlanıyor mesajı gösterir. Üretim derlemesinde ana dosya yaklaşık 239 kB, grafik dosyası 359 kB'dir; bunlar sıkıştırma öncesi yaklaşık değerlerdir.
+
+### 8. Neyi doğruladık?
+
+27 backend/SSE testi, sekiz frontend testi ve derleme başarılıdır. Yeni metrik testleri gerçek API → kuyruk → worker → commit → SSE → GET zincirini, filtreleri ve pencere sınırlarını denetler. Node testleri seri karışmasını, geçersiz değerleri, sıfır yüzdesini, kronolojik sıralamayı ve tek zaman noktasını denetler. Tarayıcıdaki yerleşim ve etkileşim otomatik doğrulanmadı; kullanıcı grafiği açıp yeni ölçüm göndererek kontrol edecektir.
+
+Kaynak: Recharts eksen açıklamaları: https://recharts.github.io/en-US/guide/domainAndTicks/ ve XAxis API: https://recharts.github.io/en-US/api/XAxis/ . Kullanılan paket sürümünün yerel tür tanımları da kontrol edildi.
+
+
+### Grafik zaman görünümü düzeltmesi
+
+Bir hafta önceki kayıtlarla bugün birkaç dakika arayla gelen kayıtları aynı gerçek zaman eksenine koyunca yeni noktalar birbirine çok yaklaşır. Bu yüzden kayıtları sırayla eşit aralığa dizmek yerine zaman penceresi seçimi ekledik; böylece gerçek zaman anlamı korunur.
+
+METRIC_WINDOWS üç pencere tanımlar: 1h, 24h, all. windowKey seçili pencereyi useState içinde tutar; başlangıcı 1h'dir. metricWindow, points.at(-1).time ile kayıtlı son zamanı alır, seçilen süreyi çıkarır ve bu sınırdan önceki noktaları geçici olarak görünümden ayırır. Veritabanından silmez. shownPoints grafiğe ve tabloya birlikte verilir. Pencere mevcut son 100 kayda uygulanır; daha eski kayıtları ayrıca istemez.
+
+ResponsiveContainer.onResize gerçek kutu genişliğini chartWidth içine yazar. metricTicks bu genişliğe göre 2–6 zaman etiketi seçer. MetricTimeTick saat ile tarihi iki SVG tspan satırında gösterir. metricTickLabel kısa zaman aralığında saniyeleri, 10 saniyeden kısa aralıkta milisaniyeleri ekler. Böylece farklı zamanlar yalnızca aynı dakika etiketiyle yazılmaz. Sayısal zaman ekseni korunur.
+
+duplicateCount aynı olay zamanını taşıyan ek kayıtları sayar. Aynı zamandaki farklı değerlerin aynı dikey hizada görünmesi doğrudur; bunlara yapay saat eklemeyiz. MetricTooltip, o zamanla eşleşen shownPoints kayıtlarının hepsini listeler. Tüm kayıtlar görünümünde eski ve yeni zamanlar tekrar tek eksene alınacağı için yakın örneklerin sıkışması mümkündür; 1 saat seçimiyle yakınlaşılır.
+
+Üç yeni test kullanıcının haftalık/dakikalık dağılımını, aynı zamanlı kayıtların korunmasını, pencerenin son ölçüme göre hesaplanmasını, dahil sınırları, dar ekran etiket sayısını ve saniye/milisaniye ayrımını doğrular. Toplam 11 frontend testi ve derleme başarılıdır; görsel tarayıcı doğrulaması yapılmamıştır.
+
+
+## Faz 3 metrik seçimi — aynı grafik, farklı ölçümler
+
+Şemadaki yerimiz yine veritabanı → API/SSE → React grafiği. Yeni veri depolama sistemi kurmadık; mevcut name ve unit alanlarıyla grafiğin hangi ölçümü isteyeceğini seçilebilir yaptık.
+
+### 1. METRIC_TYPES
+
+metricQuery.js içindeki METRIC_TYPES, ekranın tanıdığı üç ölçümün tanımıdır. key seçimi React içinde ayırt eder; label ekrandaki başlık, shortLabel kısa isim, name API'nin ölçüm adı, unit API'nin birimidir. percent, yüzde ölçeği gerekip gerekmediğini belirtir. CPU cpu_usage/percent, bellek memory_usage/percent, yanıt süresi response_time/ms kullanır. metricType(key) bu tanımı bulur; bilinmeyen seçim için hata verir.
+
+### 2. Sorguyu ve veriyi seçime bağlamak
+
+buildMetricQuery(service, metricKey), seçilen türün name/unit değerlerini URLSearchParams içine koyar. metricPoints(data, service, metricKey), gelen satırların tam bu servis/isim/birime ait olduğunu kontrol eder. Yüzdede 101 geçersizdir; yanıt süresinde 420.5 geçerlidir. Yanıt süresi negatif olamaz. Bunlar panelde çizdiğimiz fiziksel ölçümlerin beklentileridir; genel API farklı metrik adlarını da saklayabilir. formatMetricValue yüzde için %64,2, yanıt süresi için 420,5 ms üretir; sıfır da doğru bir değerdir.
+
+### 3. Form ve React state
+
+draftMetricKey açılır kutuda seçilen henüz uygulanmamış değerdir. metricKey grafikte uygulanmış türdür. select içindeki option öğeleri METRIC_TYPES üzerinden oluşturulur. onChange taslağı değiştirir. Göster düğmesinde setService ile servis, setMetricKey ile metrik birlikte uygulanır. query değişince önceki HTTP isteği ve SSE bağlantısı temizlenir; yeni seçimle yenileri açılır. Sonuçlar query ile saklandığından CPU yanıtı yanıt süresi başlığı altında görünmez.
+
+### 4. Birim ve eksen
+
+CPU ile bellek aynı yüzde ölçeğini kullanır: domain=[0,100]. Yanıt süresinde domain=[0,'auto'] kullanılır; üst sınırı grafik kütüphanesi gelen sayılardan hesaplar. Bu yüzden 420 ms değeri 100 sınırında kesilmez. YAxis birimi, Line ismi, Tooltip değerleri, özet kartı ve tablo aynı type tanımından gelir. Farklı birimler tek seride birleştirilmez veya kendiliğinden dönüştürülmez.
+
+### 5. Veri gelmemesi
+
+Yeni seçilen metrik hiç gönderilmemişse grafik yerine o servis için kayıt bulunmadığı ve beklenen name/unit çifti yazılır. Ekran bilgisayardan CPU, bellek veya süre ölçmez; POST /metrics ile gelen kayıtları gösterir. Kullanıcı örneğin response_time/ms türünde bir kayıt gönderince mevcut worker bunu kaydeder; metrik SSE bağlantısı haber verir ve grafik güncellenir.
+
+### 6. Kontrol
+
+14 frontend testi ve derleme başarılıdır. Seçimin doğru sorguyu üretmesi, birimlerin karışmaması, yanıt süresinin 100'den büyük olabilmesi, yüzde sınırları, sıfır ve birim biçimlendirmesi test edildi. Geçici kayıtlarla gerçek API → worker → SSE → Vite GET zinciri bellek ve yanıt süresi için kontrol edildi; deneme verileri temizlendi. Bu kontroller tarayıcıda görsel/tıklama testi değildir.
+
+
+## Faz 3 alarm bildirimleri — adım adım
+
+Şemadaki yerimiz: worker → alarm kuralını değerlendir → alerts tablosuna kaydet → GET /alerts → React listesi. Bu adım alarm motorunu yeniden yazmaz; daha önce oluşan bildirimleri kullanıcıya gösterir.
+
+### 1. alertQuery.js
+
+ALERT_PAGE_SIZE = 20, sayfa başına kayıt sınırıdır. EMPTY_ALERT_FILTERS içinde status='open' vardır; ilk görünüm incelenmemiş bildirimlerdir. API'deki open, sorunun kesinlikle sürmekte olduğunu ifade etmez. buildAlertFilters, servis adını temizleyip service/status alanlarını URLSearchParams içine ekler. Durum boşsa Tümü, open ise İncelenmeyenler, acknowledged ise Görüldü seçilmiştir.
+
+buildAlertPageQuery aynı filtreleri korur; limit ve offset ekler. Örneğin limit=20&offset=20, ilk 20 kaydı atlayıp ikinci sayfayı ister. Geçersiz veya API sınırını aşan offset reddedilir. validateAlertPage, yanıtın beklenen sayfa olduğunu ve kayıtların geçerli zaman/durum alanlarını taşıdığını denetler. validateAcknowledgment, sunucunun tam istediğimiz alarm için acknowledged durumu ve bir görülme zamanı döndürdüğünü kontrol eder. Böylece düğmeye basmak tek başına başarı sayılmaz.
+
+### 2. AlertsPanel.jsx state
+
+draftFilters formdaki henüz uygulanmamış değerlerdir. view.filters uygulanmış filtre, view.offset mevcut sayfadır. Uygula ile filtreler doğrulanıp offset sıfırlanır. result içinde query ve gelen items birlikte tutulur. result.query mevcut query ile aynı değilse önceki satırlar yeni başlık/filtre altında gösterilmez. loading, error, hasMore, nextOffset ve updatedAt yükleme, hata, sayfalama ve son başarılı veri alımı içindir.
+
+busyId, şu an görüldü işaretlenen alarm kimliğidir. notice başarı/hata mesajıdır. acknowledgmentRef etkin değişiklik isteğinin AbortController nesnesini tutar; bu referans hemen değiştiğinden çok hızlı çift tıklama da ikinci PATCH başlatmaz. noticeRef, işlem sonrası klavye odağını sonuç mesajına taşır.
+
+### 3. Listeyi almak ve yenilemek
+
+useEffect içinde fetch('/api/alerts?' + query), mevcut sayfayı ister. JSON yanıtı doğrulandıktan sonra setResult listeyi ekrana taşır. AbortController ve 15 saniyelik süre sınırı vardır. Filtre, sayfa veya manuel yenileme değiştiğinde önceki istek ve zamanlayıcı temizlenir.
+
+İlk sayfada GET tamamlandıktan sonra setTimeout(loadAlerts,10000) yeni kontrolü planlar. Önceki istek tamamlanmadan sonraki başlatılmaz. Bu alarm bölümü periyodik GET kullanır; log ve metrik grafikleri SSE kullanmaya devam eder. Geçmiş sayfalarda otomatik zamanlayıcı kurulmaz. Ağ gecikmesi ve tarayıcının arka plan sınırlamaları nedeniyle süre tam 10 saniye garantisi değildir.
+
+### 4. Görüldü işlemi
+
+onClick, acknowledge(alert) çağırır. setBusyId(alert.id) işlem durumunu açar ve liste effect'i durdurulur; eski GET yanıtı yeni görülme bilgisini ezemez. fetch('/api/alerts/' + alert.id + '/acknowledge', {method:'PATCH', ...}) mevcut kaydı sunucuda işaretler. PATCH burada kaydın bir bölümünü güncelleme isteğidir. Body göndermiyoruz; uç noktanın adı hangi işlemi istediğimizi zaten belirtir.
+
+Yanıt validateAcknowledgment ile doğrulanınca başarı mesajı yazılır. finally bölümünde busyId temizlenir ve refreshKey artırılır. Liste tekrar GET ile gelir; İncelenmeyenler filtresindeki satır artık çıkmış olur, sayfanın doluluğu ve Sonraki düğmesi de gerçek yanıta göre güncellenir. Görüldü filtresi alarmı ve sunucunun acknowledged_at zamanını gösterir. İkinci kez aynı isteğin gönderilmesi ilk görülme zamanını değiştirmez.
+
+İletişim koparsa PATCH veritabanına kaydedilmiş, fakat yanıt istemciye ulaşmamış olabilir. Bu yüzden hata mesajı işlemin kesin yapılmadığını söylemez; listenin tekrar kontrol edilmesini ister. Bileşen kapanırsa açık istek iptal edilir. Mesajlara HTML değil JSX metni olarak yer verilir.
+
+### 5. Alarm ne anlatıyor?
+
+triggered_at alarmın üretildiği zamandır. rule_name ve message alarm oluştuğunda kaydedilmiştir; güncel kural değiştirilse de bu eski bildirimin açıklaması korunur. status='acknowledged', kullanıcının bildirimi incelediğini belirtir. Sistemin düzelip düzelmediğini ayrıca gözlemlememiz gerekir. Bu projede otomatik resolved durumu henüz yoktur.
+
+### 6. Doğrulama
+
+18 frontend testi ve derleme başarılıdır. Ayrı test servisi ve kuralla gerçek API → worker üzerinden 21 alarm oluşturuldu; Vite üzerinden 20+1 sayfa, doğru durum filtresi, görüldü PATCH'i, aynı zamanın korunması ve işaretleme sonrası has_more değişimi kontrol edildi. Tüm deneme verileri temizlendi; kullanıcının mevcut iki alarmı işaretlenmedi. Bu kontroller tarayıcıda görsel/tıklama testi değildir. Alarm kurallarını ekleme/düzenleme ekranı sonraki adımdır.
+
+
+## Faz 3 alarm kurallarını yönetmek — adım adım
+
+Şemadaki yerimiz: React kural formu → POST/PATCH API → alert_rules tablosu. Sonraki log veya metrik geldiğinde worker bu kuralları okuyarak alarm üretir. Kuralı kaydetmek tek başına eski kayıtları yeniden işleme sokmaz.
+
+### 1. ruleForm.js: formu JSON'a dönüştürmek
+
+EMPTY_RULE yeni formun taslağıdır. Eşik ve süreler burada metindir; HTML input alanlarından gelen değerler de metindir. buildRulePayload, metinleri kontrol edip sayısal alanları Number ile sayıya çevirir. Önce boş olup olmadığını kontrol eder; çünkü JavaScript'te Number('') sıfırdır ve boş eşik yanlışlıkla sıfır olmamalıdır.
+
+Servis alanı boşsa service:null gönderilir. Bu tüm servisleri ayrı ayrı değerlendir demektir. Metrik kuralında metric_name/metric_unit gönderilir ve level:null yapılır. Log sayısı kuralında level gönderilir; metric_name ve metric_unit null yapılır. Böylece tür değiştirirken önceki türe ait alanlar API doğrulamasını bozmaz. Metrikte kullanılmayan window_seconds değeri 300 gönderilir.
+
+Log sayısı negatif olmayan tam sayı eşik ve gt/gte karşılaştırmasını destekler. Metrik kuralında gt/gte/lt/lte ve sonlu sayısal eşik vardır. Log penceresi 1–86400, tekrar bekleme 0–86400 saniye aralığındadır. enabled gerçek boolean olarak kalır. ruleToDraft, mevcut kuraldaki sayıları String ile düzenlenebilir metne çevirir; sıfır ve false değerlerini korur.
+
+### 2. Yanıtları doğrulamak
+
+validateRule, API'den gelen kaydın kimlik, tarih, sayı, durum ve türe bağlı alanlarını denetler. validateRulePage, sayfa bilgilerini kontrol eder. validateRuleSave, dönen kimlik ve kaydedilen alanların gönderdiğimiz değerlerle eşleştiğini doğrular. Böylece HTTP isteğinin yanıt vermesi tek başına başarılı kayıt sayılmaz. describeRule, koşulu okunabilir metne çevirir; örneğin cpu_usage (percent) > 85 veya Son 300 saniyedeki ERROR sayısı > 50.
+
+### 3. RuleEditor.jsx: koşula göre değişen form
+
+RuleEditor, editor ve onChange/onSubmit/onCancel props'larını alır. editor.id null ise yeni kural, sayısal kimlik varsa mevcut kural düzenlenir. editor.draft kutularda görünen değerlerdir. Tür log_count ise seviye ve zaman penceresi, metric_threshold ise metrik adı ve birimi gösterilir. datalist yalnızca yazım önerisidir; özel metrik adı ve birimi yazılabilir. Açılır kutuda log kurallarına yalnızca gt/gte sunulur.
+
+field(key), value ve onChange özelliklerini üretir; kullanıcının yazdığı metni parent bileşene aktarır. Checkbox için event.target.checked kullanılır; bu metin değil true/false döndürür. fieldset disabled, istek sürerken formun ikinci defa gönderilmesini önler.
+
+### 4. RulesPanel.jsx: liste ve düzenleme state'i
+
+offset sayfayı, result liste yanıtını, editor aktif formu, busy değişiklik isteğini, notice sonucu tutar. query ile result.query eşleşmeden başka sayfanın satırları gösterilmez. Liste GET /api/alert-rules?limit=20&offset=... ile alınır. Bu bölüm manuel yenilenir. İstek veya sayfa değiştiğinde eski GET iptal edilir; açık taslak GET yüzünden yeniden doldurulmaz.
+
+openEditor(rule), mevcut kaydı ruleToDraft ile forma aktarır; parametresiz çağrı yeni taslak açar. Form başlığına odak verilir. Bir form açıkken başka kayıt açılmaz; Kaydet veya Vazgeç kullanılır. Log türüne geçerken lt/lte seçilmişse operator gt yapılır.
+
+### 5. POST, PATCH ve JSON.stringify
+
+submitRule önce buildRulePayload ile JSON nesnesini hazırlar. saveRule, yeni kayıtta POST /api/alert-rules, mevcut kayıtta PATCH /api/alert-rules/{id} gönderir. JSON.stringify(payload), JavaScript nesnesini ağ üzerinden gönderilecek JSON metnine çevirir; Content-Type:application/json bunu sunucuya bildirir.
+
+Aç/Kapat düğmesi aynı saveRule fonksiyonuna yalnızca {enabled:true/false} gönderir. Backend bu alanı mevcut kuralla birleştirir; diğer ayarları korur. Değişiklik bekleme durumunu sıfırlar ve sonraki kayıtta uygulanır. Eski alarmlar ve açıklamaları korunur.
+
+mutationRef, başlayan isteği anında hatırlar ve hızlı çift tıklamanın ikinci POST/PATCH başlatmasını engeller. busy, kontrolleri devre dışı bırakır ve GET effect'ini durdurur. Yanıt doğrulanınca liste yeniden alınır. Başarıda form kapanır; hatada taslak korunur. İstek süresi 15 saniyedir. Zaman aşımında kayıt sunucuda oluşmuş olabilir; POST otomatik tekrarlanmaz, listeyi kontrol etmek gerekir. 409 aynı isim, 422 geçersiz alan, 404 bulunmayan kural olarak açıklanır.
+
+### 6. Kontrol ve kalan iş
+
+25 frontend testi ve derleme başarılıdır. Gerçek API/worker kontrolü için doğrudan buildRulePayload çıktıları kullanıldı. Eşik düzenleme, kapatma/açma, log sayısı, tür değişimi, geçmiş alarm bilgisinin korunması ve hata kodları doğrulandı. Test verileri temizlendi; mevcut kurallar değiştirilmedi. Tarayıcıdaki görsel/tıklama doğrulaması otomatik yapılmadı. Yerel Faz 3 ekranlarının kodları eklendi; son görsel kontrol ve ardından Faz 4 simülatör/yük testi/yayınlama/teslim hazırlığı kalır.
+
+
+## Faz 4 veri simülatörü — ne yaptık?
+
+Şemadaki yerimiz: simülatör → POST batch API → Redis → Celery worker → DB → SSE/GET → React paneli. Simülatör, örnek verilerle çalışan bir uygulama rolünü üstlenir. Bilgisayarın gerçek CPU/belleğini okumaz; gerçek bir ödeme isteği de göndermez.
+
+### 1. scripts/simulate_telemetry.py nasıl başlar?
+
+Dosyanın en altındaki if __name__ == '__main__', dosya terminalden doğrudan çalıştırıldığında main fonksiyonunu çağırır. argparse, --duration, --interval, --services gibi terminal seçeneklerini okur. Varsayılan süre 60 saniye, servis demo-payment, turlar arası bekleme 2 saniyedir. --duration 0 süresiz üretimdir; Ctrl+C üretimi durdurur. Ana API ve Docker servisleri daha önceki gibi açık olmalıdır.
+
+### 2. make_cycle: örnek kayıtları üretmek
+
+random.Random(seed), rastgele sayı kaynağıdır. Aynı seed ve ayarlar sayıları tekrarlanabilir yapar; her gerçek çalışmada güncel zaman ve run_id farklıdır. datetime.now(timezone.utc).isoformat(), her turda saat dilimi içeren yeni zamanı üretir. Böylece her Execute için elle zaman değiştirmek gerekmez.
+
+Her servise bir log ve üç metrik hazırlanır. CPU cpu_usage/percent, bellek memory_usage/percent, yanıt süresi response_time/ms kullanır. Metrikler panelin tanıdığı adlarla eşleşir. Normal değerler düşük aralıklardan, hatalı tur değerleri yüksek aralıklardan gelir. ERROR ile sentetik stack_trace gönderilir; detay ekranında görülebilir.
+
+scenario normal ise normal turlar, incident ise hatalı turlar üretilir. mixed seçiliyken sequence % 5 == 0 ifadesi her beşinci turu seçer. Yüzde işareti burada kalan bulma operatörüdür: 5, 10, 15 sayıları beşe bölününce kalan sıfırdır. Aynı turdaki log ve metrikler aynı durumla ilişkilidir.
+
+tags içindeki environment=simulation ve source=telemetry-simulator bu verilerin örnek olduğunu gösterir. run_id aynı çalışmanın kayıtlarını, sequence o çalışmanın kaçıncı turunu ayırır. Servis alanı farklı uygulamaları ayırır; varsayılan demo-payment, önceki payment-service örneklerinden ayrıdır.
+
+### 3. ApiClient: JSON'u API'ye göndermek
+
+json.dumps, Python sözlük/listesini JSON metnine çevirir. encode('utf-8') ağ üzerinden gidecek baytları üretir. urllib.request.Request, HTTP isteğini oluşturur; urlopen isteği gönderir. Yeni paket eklemek gerekmez; bunlar Python'un standart kütüphanesindedir.
+
+POST /logs/batch log listesini, POST /metrics/batch üç metrik listesini gönderir. Birden çok servis seçilirse aynı turun kayıtları yine bu iki istekte gruplanır. 202 yanıtı yalnızca kuyruğa kabul demektir. Dönen task_id ve record_count doğrulanır. İstek başarısız veya yanıt belirsizse aynı POST otomatik tekrar edilmez; çünkü API yeni POST'u yeni görev olarak kabul eder.
+
+### 4. wait_for_tasks: gerçekten işlendi mi?
+
+pending sözlüğünde kabul edilen görevlerin kimliği, türü ve kayıt sayısı tutulur. GET /tasks/{id}, PENDING/STARTED/RETRY/SUCCESS/FAILURE bilgisini verir. SUCCESS görülürse confirmed sayacı artırılır ve görev pending'den çıkarılır. FAILURE üretimi durdurur. Görevler varsayılan 30 saniyelik beklemede bitmezse yeni tur başlamaz; böylece worker kapalıyken kuyruk sınırsız doldurulmaz.
+
+accepted_logs/metrics, kimliği doğrulanmış kabul yanıtlarını sayar. confirmed_logs/metrics, worker SUCCESS görevlerine dayanır. unconfirmed_records, kimliği alınmış fakat tamamlandığı doğrulanamamış görevlerdeki sayıdır. Kaybolan POST yanıtı nedeniyle kimliği hiç alınamayan işler bu sayıya dahil edilemez; hata mesajı bu belirsizliği açıklar.
+
+### 5. Döngü ve durdurma
+
+while, süre dolana kadar yeni turlar üretir. Önce log ve metrik gönderilir, sonra worker beklenir, sayaçlar yazılır, time.sleep ile sonraki tur öncesinde beklenir. interval, tamamlanan turlar arasındaki beklemedir; ağ/worker süresi de toplam süreye eklenir. Bu program kapasiteyi ölçen yük testi değildir.
+
+time.monotonic, bilgisayarın saat ayarındaki değişikliklerden bağımsız süre ölçer. Ekrana yazılan olay zamanı için UTC datetime kullanılır. Süre dolunca yeni tur başlamaz; başlamış turun doğrulaması tamamlanabilir. Ctrl+C, KeyboardInterrupt olarak yakalanır; üretim durur, kuyruktaki işler yine tamamlanabilir. Rapor interrupted=true yazar; planlı kesintisiz bitiş anlamındaki successful false ve çıkış kodu 130 olur.
+
+### 6. Özet ve belleğin sınırlı kalması
+
+--report verilirse JSON çalışma özeti yazılır. Süre, tur sayısı, kabul/onay sayıları, hata ve çalışma kimliği saklanır. deque(maxlen=20), yalnızca son 20 görev kimliğini tutar. Böylece süresiz çalışmada görev kimliği listesi bellekte sınırsız büyümez. Rapor tam bir görev geçmişi değildir. Üretilen normal demo verileri DB'de kalır; program bunları otomatik silmez.
+
+### 7. Bugünkü gerçek deneme
+
+Sekiz test geçti. Ayrı QA servisiyle gerçek batch API → worker → DB → Vite SSE/GET bağlantısı, üç metrik, ERROR/hata izi ve iki tür alarm doğrulandı; QA verileri temizlendi. Ardından demo-payment ile 20 saniyede 10 log ve 30 metrik kaydedildi. İki tur ERROR üretti; mevcut CPU kuralından bir alarm oluştu. Alarm tekrar beklemesi nedeniyle her yüksek ölçüm için tekrar bildirim beklememek gerekir. Bu demo kayıtları panelde inceleme için bırakıldı; süreç kapandı.
+
+### 8. Sen nasıl çalıştıracaksın?
+
+Proje kökünde ayrı terminalde:
+
+    .\.venv\Scripts\python.exe scripts/simulate_telemetry.py --duration 60
+
+Panelde metrik servis kutusuna demo-payment yazıp Göster'e bas. CPU/bellek/yanıt süresi arasında seçim yap. Log filtresine de demo-payment yazıp Uygula'ya basabilirsin. Yeni veriler geldikçe çizgi ve tablo değişir. Alarmlar bölümü yaklaşık 10 saniyede bir kontrol edilir. 60 saniye sonra üretim biter. Sürekli çalışması için --duration 0; durdurmak için Ctrl+C kullan.
+
+Sonraki çalışma kapsamlı yük testi ve yayınlamadır; bugünkü hedef simülatöre kadar tamamlandı. Tarayıcıdaki son görsel/etkileşim kontrolü ayrıca bekliyor.
+
+
+## 24 Ekim 2026 — yük testi nasıl çalışıyor?
+
+Şemadaki yerimiz: **yük üreticisi → FastAPI → Redis → Celery → veritabanı ve alarm**. Bu adımda React ekranına özellik eklemedik; veriyi taşıyan hattı ölçtük.
+
+Bir kargo merkezi düşün: API paketi teslim alan gişe, Redis bekleme bandı, Celery paketleri işleyen çalışan, veritabanı ise kayıt defteri. Gişenin “aldım” demesi, çalışanın işi bitirdiği anlamına gelmez. Bu yüzden üç zamanı ayrı tutuyoruz: kabul yanıtı, bütün kayıtların DB'de görülmesi ve worker'ın işi bitirdiğinin onayı.
+
+### 1. parse_args — denemenin ayarları
+
+`--records 12000` toplam kayıt sayısıdır. `--concurrency 8`, en fazla sekiz HTTP isteğinin aynı anda yanıt beklemesine izin verir; sekiz Celery worker açmaz. `--batch-size 100`, her istekte en fazla yüz kayıt gönderir. `--rate 200`, saniyede iki yüz kayıt hedefidir; her paketin yüz kayıt olduğu durumda yaklaşık yarım saniyede bir istek planlanır. `--label`, JSON sonuç dosyasının adını belirler. Aynı ad eski sonucu değiştirir; ayrı denemeler için ayrı ad kullanılır.
+
+Ön kontrolde API, DB, Redis ve worker yanıtı kontrol edilir. Hazır değillerse üretim başlamaz. `uuid4()` her denemeye ayrı bir servis adı üretir; önceki demo ile bu denemenin sayıları karışmaz.
+
+### 2. send — istek ile kayıt farklı şeyler
+
+Tekli gönderimde bir kayıt, bir POST isteğidir. Paket gönderiminde yüz kayıt tek POST olabilir. Bu nedenle 1.000 kayıt tekli gönderimde 1.000 görev, yüzlük paketle 10 görev oluşturur. Log ve metrikler kendi uç noktalarına ayrı gönderilir. `json.dumps` sözlük/listeleri JSON'a çevirir; `urlopen` API'ye gönderir. 202, queued, görev kimliği ve paket kayıt sayısı doğrulanır. Yanıt belirsizse aynı POST yeniden gönderilmez.
+
+### 3. run_jobs — kontrollü gönderim
+
+`ThreadPoolExecutor` HTTP isteklerini paralel gönderir. `pending`, henüz sonucu alınmamış istekleri tutar. Sayı concurrency sınırına gelince `wait(..., FIRST_COMPLETED)` en az bir isteğin bitmesini bekler. Bitmiş sonuç okunur, sonra yeni istek gönderilebilir. Böylece tüm istekler baştan sınırsız bir yürütücü kuyruğuna eklenmez.
+
+Hız hedefi verildiyse o ana kadar planlanan kayıt sayısı hedef hıza bölünür; yeni paketin gönderim zamanı bulunur. Gerekirse `sleep` ile beklenir. Bu bir hedeftir; ağın yavaşlaması hedefin altında kalmaya yol açabilir. HTTP hatası görüldüğünde yeni işler eklemeyi durdurur; zaten gönderilmiş isteklerin sonuçları toplanır. Redis'te bekleyen görevler HTTP concurrency sınırından ayrı olarak birikebilir.
+
+### 4. DB ve worker kontrolü — paket gerçekten işlendi mi?
+
+Gönderim bittikten sonra SQL ile o servisin log/metrik sayıları ve `processed_tasks` kayıtları okunur. Makbuz, görevin DB işleminde kaydedilmiş olduğunu gösterir. Makbuz sayısı yanında içerdiği toplam kayıt sayısı da kontrol edilir. Ardından her görev için Celery `SUCCESS` beklenir. Yalnızca HTTP 202 dönmesi testi başarılı yapmaz.
+
+`total_seconds`, gönderim başlangıcından DB doğrulamasına kadardır. Kontrol gönderimden sonra yapıldığı için gerçek son yazma anından biraz geç olabilir. `worker_confirmed_seconds`, görev sonuçlarının ayrıca doğrulandığı zamandır. `queue_drain_seconds`, gönderim bitişinden DB doğrulamasına kadar geçen ek beklemedir; görev başına kuyruk süresi değildir.
+
+### 5. percentile ve monitor — hangi sayıya bakıyoruz?
+
+HTTP gecikmeleri küçükten büyüğe sıralanır. p95 için kayıtların %95'ine denk gelen sıra yukarı yuvarlanır ve o süre alınır. Bu, en yavaş tek isteğin süresinden daha temsil edici bir gecikme göstergesidir; kayıtların DB'ye yazılma süresi değildir. Yalnızca 10 istek varsa p95 ve p99 ikisi de en büyük örneğe denk gelebilir; az örnekle kesin kapasite sonucu çıkarılmaz.
+
+Ayrı bir `Thread`, Redis kuyruğundaki bekleyen görevleri yarım saniyede bir sayar. Örnekler `deque(maxlen=7200)` ile sınırlandırılır; örneklenen en yüksek değer ayrıca saklanır. Bu sayı kayıt değil görev sayısıdır. Kısa bir sıçrama iki kontrol arasına denk gelirse görünmeyebilir. Çalışmakta olan görevler bu sayıya dahil değildir.
+
+### 6. cleanup_test_data — deneme bittikten sonra
+
+Tam kayıt sayıları ve bütün SUCCESS sonuçları doğrulanınca yalnızca bu aracın benzersiz test servisine ait veriler temizlenir. Kullanıcının payment-service veya demo-payment kayıtları bu adla eşleşmez. SQL sorgularındaki `%s`, değeri sorgu metnine birleştirmek yerine ayrı parametre olarak gönderir. Görev makbuzları ve ilgili Redis sonuçları da temizlenir. JSON ölçüm raporu dosyada kalır.
+
+Başarısız veya tamamlanması belirsiz denemede veriler inceleme için korunur. Temizlik hatası da rapora yazılır; program başarı koduyla çıkmaz. Bu sayede “ölçüm bitti” ile “test verileri temizlendi” birbirine karışmaz.
+
+### 7. Sonuçlar nerede?
+
+`test-results/load-phase4-20261024-*.json` dosyaları her gerçek denemenin sayısal kanıtıdır. `test-results/load-summary-20261024.md` sonuçları ve yorum sınırlarını birlikte açıklar. Altı yeni birim testi hız hesabını, yüzdelikleri, concurrency sınırını, hata sonrası durmayı, geçersiz ayarları ve kullanıcı servislerini temizlemeyi reddetmeyi kontrol eder.

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import RuleEditor from './RuleEditor.jsx'
+import { apiFetch } from './apiClient.js'
 import { RULE_PAGE_SIZE, RULE_MAX_OFFSET, EMPTY_RULE, buildRulePayload, buildRuleQuery, ruleToDraft, validateRulePage, validateRuleSave, describeRule } from './ruleForm.js'
 
 const EMPTY_RESULT = { query: null, items: [], loading: true, error: '', hasMore: false, nextOffset: null }
@@ -32,7 +33,7 @@ export default function RulesPanel() {
     async function loadRules() {
       setResult((previous) => ({ ...(previous.query === query ? previous : EMPTY_RESULT), query, loading: true, error: '' }))
       try {
-        const response = await fetch(`/api/alert-rules?${query}`, { signal: controller.signal })
+        const response = await apiFetch(`/api/alert-rules?${query}`, { signal: controller.signal })
         if (!response.ok) throw new Error(`Kurallar alınamadı (HTTP ${response.status}). Servisleri kontrol edip yeniden dene.`)
         const data = validateRulePage(await response.json(), offset)
         if (active) setResult({ query, items: data.items, loading: false, error: '', hasMore: data.has_more, nextOffset: data.next_offset })
@@ -66,7 +67,7 @@ export default function RulesPanel() {
     setNotice(null)
     const timeout = setTimeout(() => controller.abort(), 15000)
     try {
-      const response = await fetch(id === null ? '/api/alert-rules' : `/api/alert-rules/${id}`, {
+      const response = await apiFetch(id === null ? '/api/alert-rules' : `/api/alert-rules/${id}`, {
         method: id === null ? 'POST' : 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload), signal: controller.signal,
       })

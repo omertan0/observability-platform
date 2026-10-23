@@ -1,5 +1,15 @@
 # Veri Alım API Sözleşmesi
 
+## Erişim — sürüm 0.6.0
+
+`GET /health` dışındaki okuma/izleme ve yönetim yolları yönetici oturumu gerektirir. `POST /auth/login`, JSON username/password ve `X-Requested-With: observability` alır; HttpOnly/SameSite=Strict çerezi ile sekiz saatlik Redis oturumu oluşturur. Aynı IP için 60 saniyede 10 giriş denemesi sınırı vardır. `GET /auth/session`, username/csrf_token/expires_at döndürür. Çerezle yapılan POST/PATCH/PUT/DELETE isteklerinde `X-CSRF-Token` ve izin verilen Origin kontrolü uygulanır. `POST /auth/logout` oturumu iptal eder.
+
+Uygulamalar `Authorization: Bearer <INGEST_API_KEY>` kullanabilir. Bu anahtar yalnızca POST /logs, /metrics, /logs/batch, /metrics/batch ile GET /tasks/{id} ve GET /ready için geçerlidir. Listeleme, alarm/kural yönetimi, docs veya SSE erişimi vermez. Gönderilen Bearer başlığı çerezden önce değerlendirilir. Bir anahtarla tüm servis adlarına veri gönderilebilir; servis başına veya görev sahibi başına ayrı yetkilendirme uygulanmaz. Görev durumu yanıtı kaydın içeriğini içermez.
+
+401 giriş/anahtar eksik veya geçersiz, 403 yetki/CSRF/kaynak kontrolü başarısız, 429 giriş sınırı, 413 büyük giriş gövdesi, 503 erişim ayarları veya oturum servisi hazır değil anlamına gelir. Giriş gövdesi 4 KiB ile sınırlandırılır. Yetkilendirme doğrulamadan önce çalışır. /docs ve /openapi.json da korumalıdır; OpenAPI güvenlik şemaları cookie+CSRF ve sınırlı Bearer seçeneklerini gösterir.
+
+SSE bağlantısı açıkken oturum döngü başlarında yeniden doğrulanır. Geçersiz/iptal edilmiş oturum için `event: auth_expired`, `data: {"status":"unauthorized"}` gönderilir ve bağlantı kapanır. Oturum Redis'ine erişilemiyorsa stream_status/unavailable gönderilir, veri sorgusu yapılmaz. Panel auth_expired veya 401 aldığında giriş ekranına döner. Yerel HTTP çerezi Secure=false; HTTPS dağıtımında SESSION_COOKIE_SECURE=true yapılandırılmalıdır.
+
 ## Uç noktalar
 
 - POST /logs: Tek bir log kaydı kabul eder.

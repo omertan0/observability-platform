@@ -14,8 +14,12 @@ import sys
 import time
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
-from urllib.request import Request, urlopen
+from urllib.request import Request
 from uuid import UUID, uuid4
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from client_access import ingestion_headers, no_redirect_open as urlopen
 
 
 class SimulatorError(Exception):
@@ -53,8 +57,12 @@ class ApiClient:
 
     def request(self, method, path, body=None):
         data = json.dumps(body, ensure_ascii=False, allow_nan=False).encode('utf-8') if body is not None else None
+        try:
+            headers = {'Content-Type': 'application/json', **ingestion_headers()}
+        except ValueError:
+            raise SimulatorError('INGEST_API_KEY hazır değil; scripts/setup_access.py çalıştırılmalı.') from None
         req = Request(self.base_url + path, data=data, method=method,
-                      headers={'Content-Type': 'application/json'})
+                      headers=headers)
         try:
             with urlopen(req, timeout=self.timeout) as response:
                 result = json.load(response)
@@ -62,7 +70,8 @@ class ApiClient:
                     raise ValueError('object required')
                 return response.status, result
         except HTTPError as exc:
-            raise SimulatorError(f'{method} {path}: HTTP {exc.code}. Servisleri ve gönderilen veriyi kontrol et.') from None
+            with exc:
+                raise SimulatorError(f'{method} {path}: HTTP {exc.code}. Servisleri, API anahtarını ve gönderilen veriyi kontrol et.') from None
         except (URLError, OSError, ValueError):
             raise SimulatorError(f'{method} {path}: yanıt alınamadı veya okunamadı. POST sonucu belirsiz olabilir; otomatik tekrar yapılmadı.') from None
 

@@ -25,10 +25,12 @@ from models import LogInput, MetricInput, AlertRuleInput, AlertRulePatch, MAX_BA
 from queries import page, log_filters, metric_filters
 from tasks import process_log, process_metric, process_logs_batch, process_metrics_batch
 from streams import log_events, metric_events
+from security import install_access
 
 logger = logging.getLogger(__name__)
-app = FastAPI(title="Observability Platform", version="0.5.0",
+app = FastAPI(title="Observability Platform", version="0.6.0",
               description="Log/metrik toplama, filtreleme ve sistem içi alarm API'si.")
+install_access(app)
 
 Limit = Annotated[int, Query(ge=1, le=200)]
 Offset = Annotated[int, Query(ge=0, le=100000)]

@@ -11,6 +11,8 @@ from psycopg.errors import LockNotAvailable, QueryCanceled, UndefinedTable
 from psycopg_pool import PoolTimeout, TooManyRequests
 
 from database import get_connection
+from security import stream_access_valid
+from redis.exceptions import RedisError
 
 logger = logging.getLogger(__name__)
 POLL_SECONDS = 2
@@ -65,6 +67,15 @@ async def revision_events(request, revision_function, event_name, *arguments):
     heartbeat_at = monotonic()
     yield "retry: 3000\n\n"
     while not await request.is_disconnected():
+        try:
+            authorized = await stream_access_valid(request)
+        except RedisError:
+            yield sse_event('stream_status', {'status': 'unavailable'})
+            await asyncio.sleep(POLL_SECONDS)
+            continue
+        if not authorized:
+            yield sse_event('auth_expired', {'status': 'unauthorized'})
+            return
         try:
             # Senkron DB sorgusu, API'nin async döngüsünü durdurmaz.
             revision = await anyio.to_thread.run_sync(revision_function, *arguments)

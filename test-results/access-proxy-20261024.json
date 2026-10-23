@@ -1,0 +1,31 @@
+{
+  "checked_at_utc": "2026-10-23T23:39:37.728537+00:00",
+  "service": "qa-access-c65ad7035a20436f8d30adac67ed632e",
+  "simulator": {
+    "confirmed_logs": 1,
+    "confirmed_metrics": 3,
+    "failed_records": 0
+  },
+  "proxy_authenticated_routes": {
+    "/logs": {
+      "status": 200,
+      "count": 1
+    },
+    "/metrics": {
+      "status": 200,
+      "count": 3
+    },
+    "/alert-rules": {
+      "status": 200,
+      "count": 2
+    },
+    "/auth/session": {
+      "status": 200,
+      "count": null
+    }
+  },
+  "frontend_entry_200": true,
+  "successful": true,
+  "scope": "Real ingestion key, worker/DB and cookie/CSRF through Vite proxy; no browser visual or click test.",
+  "test_data_cleaned": true
+}

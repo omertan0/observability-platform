@@ -13,6 +13,9 @@ from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
 BASE_URL = "http://127.0.0.1:8000"
+sys.path.insert(0, str(ROOT))
+from client_access import AdminClient, ingestion_headers
+admin_client = AdminClient(BASE_URL)
 
 
 def docker(*args):
@@ -23,10 +26,13 @@ def docker(*args):
 
 def request(method, path, payload=None):
     data = json.dumps(payload).encode() if payload is not None else None
-    req = Request(BASE_URL + path, data=data, method=method, headers={"Content-Type": "application/json"})
+    # Hazır olma ve veri gönderimi uygulama anahtarıyla; listeleme yönetici oturumuyla.
+    ingest = path == '/ready' or method == 'POST'
+    headers = {"Content-Type": "application/json", **(ingestion_headers() if ingest else {})}
+    req = Request(BASE_URL + path, data=data, method=method, headers=headers)
     started = time.monotonic()
     try:
-        with urlopen(req, timeout=20) as response:
+        with (urlopen(req, timeout=20) if ingest else admin_client.open(req, timeout=20)) as response:
             code, body = response.status, json.load(response)
     except HTTPError as exc:
         code, body = exc.code, json.load(exc)

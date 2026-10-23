@@ -1,0 +1,63 @@
+{
+  "checked_at_utc": "2026-10-23T23:08:56.355267+00:00",
+  "label": "phase4-20261024-bulk",
+  "requested_records": 10000,
+  "accepted_records": 10000,
+  "service": "qa-load-08bf11ea6b2c4b99a9b869a99dc0e3bc",
+  "saved_records": 10000,
+  "saved_logs": 5000,
+  "saved_metrics": 5000,
+  "processed_tasks": 100,
+  "receipt_records": 10000,
+  "task_states": {
+    "SUCCESS": 100
+  },
+  "attempted_records": 10000,
+  "not_attempted_records": 0,
+  "http_requests": 100,
+  "http_errors": [],
+  "http_error_rate_percent": 0.0,
+  "concurrency": 8,
+  "batch_size": 100,
+  "acceptance_seconds": 0.367,
+  "target_records_per_second": null,
+  "total_seconds": 1.832,
+  "queue_drain_seconds": 1.465,
+  "worker_confirmed_seconds": 1.942,
+  "records_per_second": 5458.83,
+  "http_p50_ms": 19.59,
+  "http_p95_ms": 78.06,
+  "http_p99_ms": 87.15,
+  "queue_peak_samples": 73,
+  "queue_samples": [
+    {
+      "seconds": 0.002,
+      "waiting_tasks": 0
+    },
+    {
+      "seconds": 0.503,
+      "waiting_tasks": 73
+    },
+    {
+      "seconds": 1.017,
+      "waiting_tasks": 42
+    },
+    {
+      "seconds": 1.53,
+      "waiting_tasks": 9
+    }
+  ],
+  "queue_monitor_errors": [],
+  "queue_scope": "Tüm yerel celery kuyruğundaki bekleyen görevler; çalışan görevler dahil değil.",
+  "alert_count": 0,
+  "successful": true,
+  "environment": {
+    "platform": "Windows-11-10.0.26300-SP0",
+    "python": "3.14.3",
+    "logical_cpus": 24
+  },
+  "timing_note": "Ön hazırlık ve temizlik hariç. DB bitişi gönderim sonrası kontrol edilir. HTTP yüzdelikleri başarılı kabul yanıtlarına aittir; nearest-rank kullanılır.",
+  "workload": "Half INFO logs, half cpu_usage/percent=70 metrics; local machine, single run.",
+  "data_cleaned": true,
+  "cleanup_error": null
+}
