@@ -19,10 +19,13 @@ class LoadRunnerChecks(unittest.TestCase):
     def test_cli_rejects_path_traversal_and_invalid_limits(self):
         for args in [['--label', '../wrong'], ['--label', 'x/y'], ['--records', '0'],
                      ['--batch-size', '101'], ['--concurrency', '33'], ['--rate', 'nan'],
-                     ['--rate', '0.1'], ['--wait-timeout', '0'], ['--metric-value', 'inf']]:
+                     ['--rate', '0.1'], ['--wait-timeout', '0'], ['--metric-value', 'inf'],
+                     ['--base-url', 'ftp://host'], ['--base-url', 'https://user:pass@host']]:
             with self.subTest(args=args), redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
                 load.parse_args(args)
         self.assertEqual(load.parse_args(['--records', '12000', '--rate', '200']).rate, 200)
+        self.assertEqual(load.parse_args(['--base-url', 'https://example.test/api/']).base_url,
+                         'https://example.test/api')
 
     def test_pacing_uses_record_counts_not_request_counts(self):
         clock = [0.0]

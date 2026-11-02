@@ -1,5 +1,7 @@
 # Veri Alım API Sözleşmesi
 
+Docker kurulumunda aşağıdaki yolların dış adresi `http://127.0.0.1:8080/api` ile başlar; örneğin `POST /logs`, `POST http://127.0.0.1:8080/api/logs` olur. Panelde oturum açıldıktan sonra Swagger `/api/docs` adresindedir. Python ile yerel geliştirmede varsayılan API adresi `http://127.0.0.1:8000` olarak kalır.
+
 ## Erişim — sürüm 0.6.0
 
 `GET /health` dışındaki okuma/izleme ve yönetim yolları yönetici oturumu gerektirir. `POST /auth/login`, JSON username/password ve `X-Requested-With: observability` alır; HttpOnly/SameSite=Strict çerezi ile sekiz saatlik Redis oturumu oluşturur. Aynı IP için 60 saniyede 10 giriş denemesi sınırı vardır. `GET /auth/session`, username/csrf_token/expires_at döndürür. Çerezle yapılan POST/PATCH/PUT/DELETE isteklerinde `X-CSRF-Token` ve izin verilen Origin kontrolü uygulanır. `POST /auth/logout` oturumu iptal eder.
@@ -90,7 +92,7 @@ Canlı OpenAPI tanımı /openapi.json, deneme ekranı /docs adresindedir.
 
 ## Canlı metrik akışı
 
-API sürümü 0.5.0. `GET /stream/metrics`, `text/event-stream` döndürür. `service`, `name`, `unit`, `tags`, `start`, `end` filtreleri GET /metrics ile aynı yardımcı fonksiyonu kullanır. `limit` 1–200, varsayılan 100'dür; izlenen görünüm offset=0'dır. Geçersiz filtre ve limit başlıklardan önce 422 döndürür.
+API sürümü 0.6.0. `GET /stream/metrics`, yönetici oturumuyla `text/event-stream` döndürür. `service`, `name`, `unit`, `tags`, `start`, `end` filtreleri GET /metrics ile aynı yardımcı fonksiyonu kullanır. `limit` 1–200, varsayılan 100'dür; izlenen görünüm offset=0'dır. Geçersiz filtre ve limit, yetki doğrulamasından sonra fakat akış başlıklarından önce 422 döndürür.
 
 `metrics_changed`, ilk bağlantıda ve filtreli son `limit + 1` kaydın timestamp/id özeti değiştiğinde gönderilir. JSON içindeki revision ile olayın id alanı aynı özettir. İstemci aynı filtreler ve limit ile GET /metrics?offset=0 çağırır. Fazladan satır has_more durumunu izler. CPU paneli service + name=cpu_usage + unit=percent + limit=100 kullanır. Böylece başka metrik veya birim kendi grafiğini yeniletmez. İzlenen pencereye girmeyen daha eski kayıtlar bildirim üretmez.
 
@@ -98,7 +100,15 @@ Log akışındaki retry:3000, yaklaşık 15 saniyelik keepalive, iki saniyelik D
 
 ### Panelde kullanılan metrik adları
 
-Panel CPU için `name=cpu_usage&unit=percent`, bellek yüzdesi için `name=memory_usage&unit=percent`, yanıt süresi için `name=response_time&unit=ms` kullanır. GET ve SSE aynı seçili ad/birimle filtrelenir. API bu üç adla sınırlı değildir. Panelde yüzdeler 0–100, yanıt süresi negatif olmayan sonlu bir değer olarak beklenir; birim dönüşümü veya farklı serileri birleştirme yapılmaz.
+Panel CPU için `name=cpu_usage&unit=percent`, bellek yüzdesi için `name=memory_usage&unit=percent`, yanıt süresi için `name=response_time&unit=ms` kullanır. `artersoft-vm` servisindeki bu süre dahili `/health` kontrolüdür; `observability-api` servisindeki aynı adlı seri gerçek API isteklerinin uygulama katmanı süresidir. API enstrümantasyonundan gelen noktada panel, rota/yöntem/durum etiketlerini açıklar. GET ve SSE aynı seçili ad/birimle filtrelenir. API bu adlarla sınırlı değildir. Panelde yüzdeler 0–100, yanıt süresi negatif olmayan sonlu bir değer olarak beklenir; birim dönüşümü veya farklı serileri birleştirme yapılmaz.
+
+## API isteği ölçümü
+
+`API_REQUEST_TELEMETRY_ENABLED=true` iken API, sağlık kontrolleri, Swagger/OpenAPI, SSE ve log/metrik/alarm/görev listeleme GET'leri dışında isteklerin yöntemini, eşleşen rota şablonunu, HTTP durumunu ve süresini ölçer. İstek gövdesi, sorgu değerleri, kimlik doğrulama başlıkları ve parola kaydedilmez. Her ölçüm `observability-api` servisine `source=api-instrumentation` etiketiyle bir log ve `response_time/ms` metriği üretir; kayıtlar tek idempotent Celery göreviyle birlikte veritabanına yazılır. JSON biçimindeki olay API konteyner loguna da yazılır. `API_REQUEST_TELEMETRY_ENABLED=false` ile kapatılabilir.
+
+Log ve metrik listeleme istekleri kendi kayıtlarını üretmez; bu, panelin kendi sorgularıyla sonsuz güncelleme döngüsü oluşturmasını önler. Ölçüm API isteğinin uygulama katmanındaki süresidir; Nginx/TLS süresini, tarayıcı render süresini veya uçtan uca kullanıcı deneyimini kapsamaz. Uzun ömürlü SSE bağlantıları ve statik web dosyaları ölçülmez.
+
+Panelde bu seri için `observability-api` servis adını seçin. `artersoft-vm` altında görünen `response_time/ms` serisi ise host-agent tarafından ölçülen dahili `/health` süresidir.
 
 ## Görev takibi
 

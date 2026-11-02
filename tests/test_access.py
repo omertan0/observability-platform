@@ -7,6 +7,7 @@ import time
 import unittest
 from unittest.mock import MagicMock, patch
 from urllib.error import HTTPError
+from urllib.parse import urljoin, urlsplit
 from urllib.request import Request, urlopen
 
 from dotenv import load_dotenv
@@ -131,6 +132,30 @@ class AccessHTTPChecks(unittest.TestCase):
         except HTTPError as error:
             with error:
                 return error.code, json.load(error)
+
+    def test_swagger_uses_public_api_prefix(self):
+        prefix = urlsplit(BASE).path.rstrip('/')
+        with self.client.open(BASE + '/docs', timeout=10) as response:
+            document = response.read().decode('utf-8')
+        self.assertIn("url: '" + prefix + "/openapi.json'", document)
+        code, schema = self.status(BASE + '/openapi.json', self.client)
+        self.assertEqual(code, 200)
+        if prefix:
+            self.assertIn({'url': prefix}, schema.get('servers', []))
+
+    def test_trailing_slash_redirect_keeps_public_api_prefix(self):
+        prefix = urlsplit(BASE).path.rstrip('/')
+        for path in ['/docs', '/logs']:
+            with self.subTest(path=path):
+                try:
+                    self.client.open(BASE + path + '/', timeout=10)
+                    self.fail('Eğik çizgi için yönlendirme bekleniyordu')
+                except HTTPError as error:
+                    with error:
+                        self.assertEqual(error.code, 307)
+                        target = urlsplit(urljoin(BASE + '/', error.headers['Location']))
+                        self.assertEqual(target.path, prefix + path)
+                        self.assertEqual(target.netloc, urlsplit(BASE).netloc)
 
     def test_anonymous_and_invalid_credentials(self):
         for path in ['/logs', '/metrics', '/alert-rules', '/alerts', '/docs', '/openapi.json', '/stream/logs', '/ready']:

@@ -18,6 +18,7 @@ from threading import Event, Thread
 import time
 from urllib.error import HTTPError
 from urllib.request import Request
+from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -47,6 +48,8 @@ def parse_args(argv=None):
     parser.add_argument("--metric-value", type=float, default=70)
     parser.add_argument("--rate", type=float, default=0, help="Hedef kayıt/saniye; 0 beklemeden gönderir")
     parser.add_argument("--wait-timeout", type=float, default=120)
+    parser.add_argument("--base-url", default=os.getenv("TEST_API_URL", "http://127.0.0.1:8000"),
+                        help="API kök adresi; canlı kullanımda ör. https://host/api")
     args = parser.parse_args(argv)
     if not 1 <= args.records <= 100000 or not 1 <= args.concurrency <= 32 or not 1 <= args.batch_size <= 100:
         parser.error("records 1-100000, concurrency 1-32 ve batch-size 1-100 olmalıdır")
@@ -56,6 +59,11 @@ def parse_args(argv=None):
         parser.error("rate 0 veya 1-100000 arasında sonlu bir sayı olmalıdır")
     if not math.isfinite(args.wait_timeout) or not 1 <= args.wait_timeout <= 600:
         parser.error("wait-timeout 1-600 arasında olmalıdır")
+    parts = urlsplit(args.base_url)
+    if (parts.scheme not in {"http", "https"} or not parts.netloc or parts.username or parts.password
+            or parts.query or parts.fragment):
+        parser.error("base-url http(s) adresi olmalı; kullanıcı bilgisi, sorgu veya parça içermemelidir")
+    args.base_url = args.base_url.rstrip("/")
     if not 0 <= args.metric_value <= 100:
         parser.error("metric-value 0-100 arasında olmalıdır")
     return args
@@ -114,7 +122,7 @@ def main(argv=None):
     client = Redis.from_url(celery_app.conf.broker_url, socket_connect_timeout=2, socket_timeout=2)
 
     try:
-        with urlopen(Request("http://127.0.0.1:8000/ready", headers=ingestion_headers()), timeout=10) as response:
+        with urlopen(Request(args.base_url + "/ready", headers=ingestion_headers()), timeout=10) as response:
             if response.status != 200 or json.load(response).get("status") != "ready":
                 raise RuntimeError("API hazır değil")
         client.ping()
@@ -143,7 +151,7 @@ def main(argv=None):
         kind, records = job
         path = "/" + kind + ("/batch" if args.batch_size > 1 else "")
         payload = records if args.batch_size > 1 else records[0]
-        req = Request("http://127.0.0.1:8000" + path, data=json.dumps(payload).encode(),
+        req = Request(args.base_url + path, data=json.dumps(payload).encode(),
                       headers={"Content-Type": "application/json", **ingestion_headers()}, method="POST")
         began = time.perf_counter()
         try:

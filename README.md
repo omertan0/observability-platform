@@ -6,7 +6,8 @@ FastAPI ile log ve metrik toplayan, Redis/Celery ile arka planda işleyen ve Pos
 
 ```mermaid
 flowchart LR
-    U[Uygulama veya Swagger] --> A[FastAPI]
+    U[Uygulama veya simülatör] --> A[FastAPI]
+    H[Linux host-agent] -->|production profile| A
     A --> Q[Redis kuyruğu]
     Q --> W[Celery worker]
     W --> D[PostgreSQL ve TimescaleDB]
@@ -15,7 +16,35 @@ flowchart LR
     A -->|GET ile oku| D
 ```
 
-## Kurulum ve çalıştırma
+## Tüm sistemi Docker ile çalıştırma
+
+API, React paneli, worker, Redis ve veritabanı birlikte çalışabilir. Docker Desktop Linux engine açık, `.env` içindeki veritabanı ve erişim bilgileri hazır olmalıdır. İlk kez kuruluyorsa aşağıdaki geliştirme bölümündeki 1 ve 2 numaralı adımlarla `.env` ve erişim bilgileri hazırlanır. Mevcut `.env` dosyasının üzerine örnek dosya kopyalanmaz.
+
+```powershell
+docker compose up -d --build --wait --wait-timeout 180
+docker compose ps
+```
+
+Panel: http://127.0.0.1:8080/ . Mevcut `PANEL_USERNAME` ve `PANEL_PASSWORD` ile giriş yapılır. Giriş yaptıktan sonra Swagger: http://127.0.0.1:8080/api/docs . Veri gönderen araçların API adresi `http://127.0.0.1:8080/api` olur.
+
+Bu düzende `web` servisi React'in derlenmiş dosyalarını Nginx ile sunar; `/api/` isteklerini yalnızca Docker ağı içinde erişilen FastAPI servisine yönlendirir. `API_ROOT_PATH=/api`, Swagger'ın belge ve deneme isteklerini aynı adrese göndermesini sağlar. SSE için proxy tamponlama kapalıdır. Nginx, API'nin adresi konteyner yeniden oluşturulunca değişirse Docker DNS üzerinden yeniden çözer. API ve worker aynı kök Dockerfile'ı kullanır; panelin ayrı Dockerfile'ı Node ile derleme yapıp yalnızca statik çıktıyı Nginx imajına kopyalar. İmajların içine `.env` veya erişim şifreleri kopyalanmaz.
+
+```powershell
+# Son kayıtları göster; şifreleri veya oturum çerezlerini paylaşmayın.
+docker compose logs --tail=30 api worker web
+# Durdur; veriler Docker volume'larında kalır.
+docker compose stop
+# Kod güncellemesinden sonra imajları tekrar oluştur ve başlat.
+docker compose up -d --build --wait --wait-timeout 180
+```
+
+`db-init` başarıyla tamamlanıp kapanır. API healthcheck'i işlemin yanıt verdiğini, web healthcheck'i Nginx'i kontrol eder; DB/Redis için girişten sonra panel bağlantı kontrolü kullanılır. Worker'ın çalışması ayrıca görev sonucu ile doğrulanır. `restart: unless-stopped` uzun çalışan servisleri yeniden başlatır; uygulama hatalarını veya disk kaybını önlemez. Kalıcı veriler için ayrıca yedek alınmalıdır. `docker compose down -v` veritabanı ve Redis volume'larını siler; normal durdurma için kullanılmaz.
+
+Varsayılan panel bağlantısı yalnızca bu bilgisayara açıktır. `.env` içindeki `PANEL_HTTP_PORT` değiştirilirse `DOCKER_PANEL_ALLOWED_ORIGINS` de aynı portu içermelidir. `PANEL_ALLOWED_ORIGINS` Windows/Vite geliştirme içindir; Docker API'si `DOCKER_PANEL_ALLOWED_ORIGINS` kullanır. Redis ve veritabanı geliştirme araçları için yalnızca `127.0.0.1` üzerinde erişilebilir; API'nin ayrı yayımlanan portu yoktur. Proxy'nin ilettiği istemci adresi API tarafından güvenilir kabul edildiğinden API doğrudan internete açılmamalıdır.
+
+Bu komut yerel geliştirme içindir; host-agent başlatmaz. Linux sunucusunda production servisleri (HTTPS geçidi ve host-agent) açmak için `.env` hazırlandıktan sonra `docker compose --profile production up -d --build` kullanılır. Production profili Linux ana makinenin `/proc` ve `/sys` alanlarını salt okunur bağlar. Yayındaki örnek: https://artersoft-monitor-omer.spaincentral.cloudapp.azure.com. Agent ölçüm sınırları aşağıdaki "Gerçek makine ölçümleri" bölümünde açıklanmıştır. HTTP üzerinde `SESSION_COOKIE_SECURE=true` kullanılırsa tarayıcı oturumu göndermez.
+
+## Python ve Vite ile geliştirme
 
 Docker Desktop Linux engine açık olmalıdır. API bilgisayarda Python ile, worker Linux konteynerinde çalışır. Python 3.13 veya 3.14 kullanılabilir; worker image Python 3.13 kullanır.
 
@@ -27,6 +56,16 @@ python -m venv .venv
 ```
 
 2. `.env.example` dosyasını `.env` olarak kopyalayın, kullanıcı/veritabanı bilgilerini ve parolayı belirleyin. Mevcut `.env` varsa onu kullanın. `.env` Git'e gönderilmez.
+
+Panel ve uygulama erişim bilgilerini hazırlayın (mevcut dolu alanlar korunur):
+
+```powershell
+.\.venv\Scripts\python.exe scripts/setup_access.py
+# Alternatif: şifre sorulmadan rastgele şifre ve anahtar üretir.
+# .\.venv\Scripts\python.exe scripts/setup_access.py --generate
+```
+
+Tek yönetici hesabı `.env` içindeki `PANEL_USERNAME` / `PANEL_PASSWORD` ile tanımlanır. Şifre en az 16 karakterdir; rastgele üretimde değer `.env` dosyasından okunur. `INGEST_API_KEY` ayrı bir uygulama anahtarıdır. Bu değerler gizlidir; rapora, ekran görüntüsüne veya GitHub'a eklemeyin. `.env` hem Git hem Docker build bağlamından dışlanır. İnternette yayınlamada sunucunun gizli ortam ayarları kullanılacaktır.
 
 3. Veritabanı, kuyruk ve worker'ı açın:
 
@@ -42,13 +81,35 @@ docker compose up -d --build --wait worker
 .\.venv\Scripts\python.exe -m uvicorn main:app --reload --timeout-graceful-shutdown 3
 ```
 
-Swagger: http://127.0.0.1:8000/docs
+Panel: http://127.0.0.1:5173/ (frontend bölümündeki komutla açılır). Önce giriş yapın.
+
+Swagger: http://127.0.0.1:8000/docs (aynı tarayıcı ve aynı `127.0.0.1` ana makinesindeki panel oturumu gerekir). `localhost` ve `127.0.0.1` farklı çerez kapsamlarıdır; adresleri karıştırmayın.
 
 - `GET /health`: API süreci çalışıyor mu?
 - `GET /ready`: Veritabanı şeması ve Redis erişilebilir mi? Worker sağlığını ölçmez.
 - Worker mesajları: `docker compose logs --tail=40 worker`
 - Kod değiştiğinde worker için yeniden `--build` gerekir; API `--reload` ile yenilenir.
 - `--timeout-graceful-shutdown 3`, geliştirme sırasında açık SSE bağlantılarının yeniden başlatmayı sınırsız bekletmesini önler. API yeniden açılırken panel kısa süre yeniden bağlanma durumu gösterebilir.
+
+## Giriş ve yetkiler
+
+| Erişim | Yetki |
+| --- | --- |
+| Girişsiz | Yalnızca `GET /health` ve doğrulanmış giriş isteği |
+| Yönetici oturumu | Listeleme, canlı akış, veri gönderimi, alarm/kural yönetimi |
+| `Authorization: Bearer <INGEST_API_KEY>` | Dört log/metrik POST ucu, `GET /tasks/{id}` ve `GET /ready` |
+
+Veri gönderim anahtarı logları/metrikleri okuyamaz, SSE açamaz veya kural yönetemez. Bu sürüm tek yönetici ve tek ortak uygulama anahtarı kullanır; kullanıcı kaydı, kullanıcı bazlı roller ve servis başına ayrı anahtar bulunmaz.
+
+`POST /auth/login`, JSON kullanıcı adı/şifre ve `X-Requested-With: observability` başlığı alır. Başarılı girişte rastgele HttpOnly, SameSite=Strict çerezi verilir. Oturumun kendisi Redis'te, çerez değerinin SHA-256 özetinden türetilmiş anahtar altında sekiz saat tutulur. Panel yalnızca CSRF değerini bellekte saklar; şifre veya oturum belirtecini localStorage'a yazmaz. `GET /auth/session`, giriş yapan kullanıcıyı, csrf_token ve expires_at değerlerini döndürür. Değişiklik isteklerinde çereze ek olarak `X-CSRF-Token` gerekir. Panel bunu otomatik ekler. İzin verilen Origin listesi ayrıca kontrol edilir.
+
+`POST /auth/logout` Redis oturumunu siler ve çerezi kaldırır. Mevcut SSE bağlantıları her döngüde (normalde yaklaşık iki saniyede bir) oturumu tekrar doğrular; geçersiz oturumda auth_expired olayıyla kapanır. Oturum Redis'ine erişilemiyorsa yeni veri bildirimi yapılmaz. Panel, oturum süresi dolduğunda veya 401/auth_expired aldığında giriş ekranına döner. Oturum/erişim servisi erişilemezse korunan isteklere 503 döner; giriş kontrolü atlanmaz.
+
+Aynı IP'den 60 saniyede en fazla 10 giriş denemesi yapılabilir; başarılı girişler de bu sayıya dahildir. Sınırda 429 ve Retry-After döner. Ters proxy kurulumunda gerçek istemci IP'si yalnızca güvenilen proxy'den alınmalıdır. Yerel Vite proxy'sinden gelen kullanıcılar aynı IP sınırını paylaşabilir. Giriş gövdesi en fazla 4 KiB'dir.
+
+Swagger'da yönetici değişiklikleri için önce `GET /auth/session` ile csrf_token alınır; Authorize → CsrfToken alanına girilir. Oturum çerezi tarayıcıdan otomatik gider. Uygulama anahtarıyla denemek için IngestKey alanına yalnızca anahtar yazılır. Yönetim işlemlerine dönerken IngestKey temizlenmelidir; gönderilen Bearer kimliği öncelikli değerlendirilir.
+
+Yerel HTTP için `SESSION_COOKIE_SECURE=false` kullanılır. Yayınlamada HTTPS, `SESSION_COOKIE_SECURE=true` ve gerçek site adresini içeren `PANEL_ALLOWED_ORIGINS` gereklidir. Ayar/şifre/anahtar değiştiğinde API yeniden başlatılır; yönetici bilgisi değişmiş eski oturumlar sonraki kontrolde geçersiz olur. API'nin /docs ve /openapi.json yolları da korunur. Yönetici şifresi bu tek hesaplı kurulumda `.env`/gizli ortam değişkenidir; veritabanında bir kullanıcı tablosu veya şifre hash'i saklama sistemi eklenmemiştir.
 
 ## Veri gönderme
 
@@ -186,20 +247,39 @@ Yerel kesinti/kurtarma kontrolleri servisleri kısa süre durdurur ve bir worker
 .\.venv\Scripts\python.exe scripts/verify_outages.py
 ```
 
-Sınırlı yerel yük ölçümü:
+Yerel yük ölçümü (API ve Docker servisleri açık olmalıdır):
 
 ```powershell
-.\.venv\Scripts\python.exe scripts/load_backend.py --records 1000 --concurrency 8 --batch-size 1 --label pooled
-.\.venv\Scripts\python.exe scripts/load_backend.py --records 1000 --concurrency 8 --batch-size 100 --label batch
+.\.venv\Scripts\python.exe scripts/load_backend.py --records 1000 --concurrency 8 --batch-size 1 --label tekli-deneme
+.\.venv\Scripts\python.exe scripts/load_backend.py --records 1000 --concurrency 8 --batch-size 100 --label paket-deneme
+
+# Yaklaşık bir dakika: 100'lük paketlerle 200 kayıt/saniye hedefi.
+.\.venv\Scripts\python.exe scripts/load_backend.py --records 12000 --concurrency 8 --batch-size 100 --rate 200 --label surekli-deneme
 ```
 
-Ölçüm JSON'ları `test-results` içinde tutulur. HTTP gecikmesi kuyruğa kabul cevabının süresidir; bütün kayıtların veritabanına ulaşma süresi ayrıca ölçülür. `--log-level ERROR --metric-value 90` alarm koşullarını da çalıştırır. Bu betik sabit ve sınırlı bir backend ölçümüdür; Faz 4'teki sürekli rastgele veri üreten simülatörün ve daha kapsamlı yük testlerinin yerine geçmez.
+Ölçüm JSON'ları `test-results/load-{label}.json` içinde tutulur; aynı label tekrar kullanılırsa önceki dosyanın üzerine yazılır. Yarı log, yarı CPU metriği gönderilir. Varsayılan INFO ve CPU %70'tir; `--log-level ERROR --metric-value 90` alarm koşullarını çalıştırır. Bu veri sabit yük içindir; değişken bellek/yanıt süresi üreten görsel demo simülatörü aşağıdadır.
 
-## Sonraki aşama
+HTTP p50/p95/p99, başarılı **kuyruğa kabul yanıtlarının** gecikmesidir. p95, yanıtların en az %95'inin bu sürede veya daha kısa sürede geldiğini belirtir. `total_seconds`, gönderim başlangıcından bütün kayıtlar ve görev makbuzları DB'de görülene kadar geçen süredir. DB kontrolü gönderim bittikten sonra yapıldığından gerçek son yazma anının üst sınırıdır. `worker_confirmed_seconds`, bütün görevlerin ayrıca SUCCESS olduğunun doğrulandığı süreyi gösterir. Ön kontroller ve temizlik ölçüme dahil değildir.
+
+`--rate 0` beklemeden gönderir. Pozitif rate, HTTP istek sayısını değil kayıt/saniye hedefini belirler. Paket 100 ve hız 200 iken yaklaşık yarım saniyede bir paket planlanır; kayıtlar tek tek eşit aralıklarla gelmez. İstemci aynı anda en fazla concurrency kadar HTTP isteği tutar; worker yavaşsa Redis kuyruğu birikebilir. `--wait-timeout` gönderim sonrasındaki DB/worker beklemesini sınırlar (varsayılan 120 saniye). Bu, bütün çalışmanın toplam süre sınırı değildir; her HTTP isteğinin zaman aşımı 30 saniyedir.
+
+Redis kuyruğu 0,5 saniyede bir örneklenir. Raporlanan tepe değer tüm yerel celery kuyruğundaki **bekleyen görevleri** sayar; çalışan görevleri veya kayıt sayısını saymaz. Kısa sıçramalar kaçabilir; örneklenen tepenin 0 olması hiç kuyruk oluşmadığını kanıtlamaz. Başka simülatör veya istemciyi aynı anda çalıştırmak ölçümü etkiler.
+
+Her çalışma benzersiz bir `qa-load-...` servisi kullanır. Başarı için gönderilen/kaydedilen log ve metrik sayıları, processed_tasks makbuzları ve tüm Celery SUCCESS sonuçları birlikte doğrulanır. Ardından yalnızca o servisin test kayıtları/alarmları ve ilgili görev sonuçları temizlenir; JSON raporu kalır. Başarısız veya sonucu belirsiz çalışmada veri korunur, POST otomatik tekrar edilmez. Ön kontrolde API/DB/Redis/worker hazır değilse gönderime başlanmaz. Başarılı ölçüm ve temizlikte çıkış kodu 0'dır.
+
+Yük üreticisinin altı birim kontrolü ağ bağlantısı açmadan çalışır:
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -p test_load_runner.py -v
+```
+
+24 Ekim sonuçları ve sınırları: [yük testi raporu](test-results/load-summary-20261024.md). Bunlar tek bilgisayardaki yerel ölçümlerdir; çok kullanıcılı panel, uzun süreli dayanıklılık veya internet üzerinden üretim kapasitesi kanıtı değildir.
+
+## Panel ve gerçek makine ölçümleri
 
 ### React paneli
 
-Panel `frontend` klasöründe React ve Vite ile çalışır. Node.js 24 kuruludur. Ekran API, veritabanı ve Redis bağlantısını kontrol eder ve logları filtreleyip 20 kayıtlık sayfalarla gösterir. İlk sayfa SSE ile otomatik yenilenir. Metrik grafiği, seçilen servis ve ölçümün kayıtlı son 100 örneğini canlı günceller. CPU (%), bellek (%) ve yanıt süresi (ms) seçilebilir.
+Panel `frontend` klasöründe React ve Vite ile çalışır. Ekran API, veritabanı ve Redis bağlantısını kontrol eder ve logları filtreleyip 20 kayıtlık sayfalarla gösterir. İlk sayfa SSE ile otomatik yenilenir. Metrik grafiği, seçilen servis ve ölçümün kayıtlı son 100 örneğini canlı günceller. CPU (%), bellek (%), API yanıt süresi (ms), disk okuma hızı (B/s) ve disk yazma hızı (B/s) seçilebilir. API sürelerini görmek için servis alanına `observability-api`, log erişim kayıtlarını görmek için log filtresine aynı servis adını yazın. `artersoft-vm` üzerindeki yanıt süresi sunucunun dahili sağlık kontrolünü; `observability-api` üzerindeki seri gerçek API isteklerinin uygulama süresini gösterir.
 
 Proje kökünden ayrı bir terminalde:
 
@@ -227,7 +307,7 @@ Bu sürümde kontrol her açık SSE bağlantısı için yapılır. Çok sayıda 
 
 Derleme kontrolü: `npm.cmd run build`. Çıktı `frontend/dist` klasörüne yazılır. `node_modules`, npm önbelleği ve `dist` Git'e eklenmez; `package-lock.json` eklenir. Vite proxy ayarı geliştirme içindir; canlı dağıtımda `/api` yönlendirmesi ayrıca yapılandırılacaktır.
 
-`frontend` klasöründe `npm.cmd test`, sorgu oluşturma, URL kodlama, yerel zaman/UTC dönüşümü, geçersiz aralıklar, sayfa sınırları, metrik serisi/zaman ekseni/birim seçimi, alarm filtreleri, görüldü yanıtı, kural formu ve kural kaydetme yanıtlarını denetler. Yirmi beş kontrol vardır; bunlar tarayıcıda görsel/tıklama testleri değildir.
+`frontend` klasöründe `npm.cmd test`, sorgu oluşturma, URL kodlama, yerel zaman/UTC dönüşümü, geçersiz aralıklar, sayfa sınırları, metrik serisi/zaman ekseni/birim seçimi, alarm filtreleri, görüldü yanıtı, kural formu, kural kaydetme yanıtları ve oturum/CSRF istemcisini denetler. Yirmi sekiz kontrol vardır; bunlar tarayıcıda görsel/tıklama testleri değildir.
 
 Panelin dosyaları:
 
@@ -250,7 +330,25 @@ Panelin dosyaları:
 - `vite.config.js`: Geliştirme sunucusu ve API yönlendirmesi.
 - `package.json`: Paketler ve çalıştırma komutları.
 
-Faz 3'te log akışı, filtreleme, sayfalama, kayıt detayları, CPU/bellek/yanıt süresi seçilebilen grafik, alarm listesi/görüldü işlemi ve alarm kuralı yönetimi eklenmiştir. Faz 4 için sürekli veri simülatörü de eklenmiştir. Yerel ekranların tarayıcıda son görsel/etkileşim kontrolü, kapsamlı yük testleri, internette yayınlama ve teslim belgeleri/sunum kalmaktadır. Yerel ölçümler başka donanım veya üretim ortamında aynı performansın sağlanacağını kanıtlamaz. API bu aşamada yerel geliştirme için hazırlanmıştır; canlıya alma aşamasında kimlik doğrulama ve erişim sınırları eklenecektir.
+Faz 3 paneli ve alarm yönetimi tamamlandı. Faz 4 veri simülatörü, yerel yük denemeleri, HTTPS dağıtımı, canlı sentetik kayıt kontrolleri, gerçek VM kaynak ölçümleri ve FastAPI istek ölçümünü içerir. 2 Kasım Azure koşusunda 600 kayıt, 60/60 başarılı görev ve 0 HTTP hatası doğrulanmıştır; worker duraklatma/toparlanma ve CPU eşiği alarmı da denendi. Bu, kısa ve düşük hızlı bir kontrol olduğundan Azure yüksek hacim, uzun süre veya çok izleyicili kapasitesini kanıtlamaz. Dış uygulamaların iş logları/süreleri ve Trace entegrasyonu ayrıca gerekir. Yerel ekran senaryoları ve kapsamları [ekran kontrol raporunda](test-results/ui-summary-20261026.md), canlı yük sonuçları [yük koşusu JSON'unda](test-results/load-azure-live-20261102.json) yer alır.
+
+### Gerçek makine ölçümleri
+
+Production Compose profili `host-agent` adlı ayrı ve ayrıcalıksız Python servisini çalıştırır. Servis Linux ana makinenin `/proc/stat`, `/proc/meminfo` ve `/proc/diskstats` alanlarını okur; `/sys/block` listesini disk bölümlerini ve sanal aygıtları dışarıda tutmak için kullanır. `/proc` ve `/sys` bağları salt okunurdur; container ek Linux yetkileri almaz ve dışarıya port açmaz.
+
+Agent varsayılan olarak 30 saniyede bir CPU yüzdesi, kullanılan bellek yüzdesi ve disk okuma/yazma hızını hesaplar. CPU ve disk hızları ardışık sayaç örnekleri arasındaki farktan türetilir; ilk örnek başlangıç sayacıdır. Ölçümler `POST /metrics/batch` üzerinden mevcut `INGEST_API_KEY` ile gönderilir. API veriyi Redis/Celery/TimescaleDB hattından işler; agent veritabanına doğrudan bağlanmaz. Kayıtlar `service=artersoft-vm`, `tags.source=host-agent` ve `tags.host=artersoft-vm` olarak işaretlenir. Grafikte servis alanına `artersoft-vm` yazın.
+
+`response_time/ms` için iki ayrı servis kullanılır. `artersoft-vm` serisi dahili `/health` kontrolünün gidiş-dönüş süresidir. `observability-api` serisi aşağıdaki API isteği enstrümantasyonundan gelir; rota, yöntem ve HTTP durum etiketleri panelde gösterilir.
+
+`API_REQUEST_TELEMETRY_ENABLED=true` iken API; health/ready, Swagger/OpenAPI, SSE ve log/metrik/alarm/görev listeleme GET'leri dışındaki istekler için yapılandırılmış bir JSON logu ve `response_time/ms` ölçümü üretir. Log ve metrik aynı idempotent Celery göreviyle birlikte yazılır. Gövde, sorgu değerleri, parola ve yetkilendirme başlıkları kaydedilmez. Listeleme istekleri hariçtir; böylece panelin kendi log/metrik sorguları yeni veri üretip canlı akışı döngüye sokmaz. Ölçüm API uygulama katmanını kapsar; TLS, Nginx, tarayıcı veya uçtan uca kullanıcı süresi değildir. Ayar `false` yapılarak kapatılabilir.
+
+Sunucuda agent durumunu kontrol edin:
+
+```bash
+sudo docker compose logs --tail=30 host-agent
+```
+
+"Metrik paketi kuyruğa alındı" satırı API'nin paketi kabul ettiğini gösterir. Kayıtları `artersoft-vm` servisini seçerek panelde doğrulayın. Varsayılan aralıkla agent günde yaklaşık 14.400 metrik kaydı üretir.
 
 ### Canlı metrik grafikleri
 
@@ -260,9 +358,11 @@ Recharts 3.10.1 ile seçilen servisin ölçümleri çizilir. Başlangıç servis
 | --- | --- | --- | --- |
 | CPU kullanımı | cpu_usage | percent | %0–100 |
 | Bellek kullanımı | memory_usage | percent | %0–100 |
-| Yanıt süresi | response_time | ms | 0'dan başlayan otomatik aralık |
+| API sağlık yanıt süresi | response_time | ms | 0'dan başlayan otomatik aralık |
+| Disk okuma hızı | disk_read_bytes_per_second | bytes_per_second | B/s |
+| Disk yazma hızı | disk_write_bytes_per_second | bytes_per_second | B/s |
 
-`GET /metrics` ve `GET /stream/metrics` aynı servis/ad/birim ve `limit=100` değerini kullanır. `metrics_changed` bildirimi yeni GET başlatır. Seçim değişince önceki SSE kapatılır ve önceki serinin yanıtı yeni grafikte gösterilmez. Eksen, özet, bilgi kutusu ve tablo aynı seçili birimi kullanır. Yüzde serilerinde 0–100, yanıt süresinde sıfır veya pozitif sonlu sayılar beklenir; 420 ms gibi değerler kabul edilir. Bu fiziksel ölçüm sınırları panelin seçili tür doğrulamasıdır; genel API başka isim/birimli sonlu sayıları da saklayabilir. Manuel yenileme mümkündür. Ekran cihazı kendisi ölçmez; uygulamaların gönderdiği kayıtları gösterir. Kayıtlı son değer ile ölçüm zamanı birlikte yazılır; veri yoksa sıfır üretilmez. Servis içindeki farklı host etiketleri ayrı serilere ayrılmaz; her nokta bir kayıttır.
+`GET /metrics` ve `GET /stream/metrics` aynı servis/ad/birim ve `limit=100` değerini kullanır. `metrics_changed` bildirimi yeni GET başlatır. Seçim değişince önceki SSE kapatılır ve önceki serinin yanıtı yeni grafikte gösterilmez. Eksen, özet, bilgi kutusu ve tablo aynı seçili birimi kullanır. Yüzde serilerinde 0–100, diğer serilerde sıfır veya pozitif sonlu sayılar beklenir. Disk hızı ekranda B/s, API içinde `bytes_per_second` birimiyle saklanır. `tags.source=host-agent` olan ölçümlerde panel verinin sunucu ajanından geldiğini belirtir. Simülatör veya elle gönderilen kayıtlar da aynı API yolundan gösterilebilir. Kayıtlı son değer ile ölçüm zamanı birlikte yazılır; veri yoksa sıfır üretilmez. Servis içindeki farklı host etiketleri ayrı serilere ayrılmaz; her nokta bir kayıttır.
 
 Grafik soldan sağa olay zamanına göre ilerler. X eksenindeki aralıklar geçen süreyi, Y ekseni seçilen ölçümün birimini gösterir. Başlangıçta son kayıtlı ölçümden geriye bir saatlik kayıtlar gösterilir; 24 saat veya Tüm kayıtlar seçilebilir. Bu pencere tarayıcının şimdiki saatine değil son ölçümün zamanına dayanır; yüklü son 100 kayıt üzerinde uygulanır. Böylece hafta önceki örnekler yeni birkaç dakikalık ölçümleri tek köşeye sıkıştırmaz. Tüm kayıtlar seçilirse gerçek zaman aralıkları nedeniyle bu sıkışma yine mümkündür. Gösterilen kayıt sayısı ve zaman sınırları yazılır. Saat ve tarih iki satırda gösterilir; kısa aralıkta saniye, çok kısa aralıkta milisaniye de yazılır. Dar ekranda daha az eksen etiketi üretilir. Aynı zamandaki kayıtların tüm değerleri bilgi kutusunda listelenir; veri silinmez veya zamanları kaydırılmaz. Tek ölçümde nokta görünür; seçilen pencerenin veri tablosu klavye ile de açılır. Aradaki çizgi sürekli ölçüm yapıldığı anlamına gelmez. Eski 100 kaydın dışındaki geçmiş grafik üzerinden sayfalanmaz; daha eski kayıt varsa açıklama gösterilir. İstek hatasında eldeki önceki ölçümler hata uyarısıyla kalır; servis değişince önceki servisin verisi gösterilmez. Grafik paketi ayrı JavaScript dosyasıyla yüklenir; servis kartları ve log ekranı bu paketten ayrılmıştır.
 
@@ -288,7 +388,7 @@ Form açıkken ikinci bir kural düzenlemeye geçilmez; Kaydet veya Vazgeç ile 
 
 ## Veri simülatörü
 
-API, Redis, DB ve worker açıkken proje kökünden ayrı bir terminalde çalıştırılır:
+API, Redis, DB ve worker açıkken; `.env` içindeki INGEST_API_KEY hazırlandıktan sonra proje kökünden ayrı bir terminalde çalıştırılır:
 
 ```powershell
 .\.venv\Scripts\python.exe scripts/simulate_telemetry.py --duration 60
@@ -324,4 +424,4 @@ Simülatör testleri:
 .\.venv\Scripts\python.exe -m unittest discover -s tests -p test_simulator.py -v
 ```
 
-Sekiz test API modellerine uygun veri, senaryo/seed, yeni zamanlar, CLI sınırları, worker bekleme/süre aşımı, belirsiz POST'u tekrar etmeme, sınırlı çalışma ve Ctrl+C davranışını kapsar. Gerçek servis doğrulama özeti test-results/simulator-smoke.json içindedir; bu QA kayıtları temizlenmiştir. Panel için bırakılan kısa demonun özeti test-results/simulator-demo.json içindedir. Bu adımda kapsamlı yük testi veya yayınlama yapılmamıştır.
+Dokuz test API modellerine uygun veri, senaryo/seed, yeni zamanlar, CLI sınırları, worker bekleme/süre aşımı, belirsiz POST'u tekrar etmeme, sınırlı çalışma, eksik uygulama anahtarı ve Ctrl+C davranışını kapsar. Önceki gerçek servis doğrulama özeti test-results/simulator-smoke.json içindedir; bu QA kayıtları temizlenmiştir. Panel için bırakılan kısa demonun özeti test-results/simulator-demo.json içindedir. Yeni erişim anahtarı ve panel oturumuyla gerçek doğrulama test-results/access-proxy-20261024.json içindedir. Yük ölçümleri yukarıdaki ayrı bölümde açıklanır.

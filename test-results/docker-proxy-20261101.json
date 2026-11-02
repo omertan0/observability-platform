@@ -1,0 +1,18 @@
+{
+  "checked_at_utc": "2026-11-01T18:25:45.478366+00:00",
+  "base_url": "http://127.0.0.1:8080/api",
+  "successful": true,
+  "checks": [
+    "static panel and no-cache HTML",
+    "built JS/CSS assets and secret exclusion",
+    "missing asset returns 404",
+    "proxy path and anonymous access boundary",
+    "browser-origin login and session cookie",
+    "foreign-origin login rejected",
+    "database and Redis readiness behind proxy",
+    "Swagger uses public API path",
+    "logout revokes access"
+  ],
+  "check_count": 9,
+  "browser_visual_test": false
+}

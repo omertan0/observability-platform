@@ -1,0 +1,41 @@
+{
+  "checked_at_utc": "2026-10-25T22:33:38.911762+00:00",
+  "service": "qa-ui-d76134df",
+  "worker_states": {
+    "SUCCESS": 458
+  },
+  "records_before_cleanup": {
+    "logs": 229,
+    "metrics": 687,
+    "alerts": 2,
+    "alert_states": 1
+  },
+  "task_receipts_before_cleanup": 458,
+  "receipt_records": 916,
+  "alert_statuses_before_cleanup": {
+    "acknowledged": 2
+  },
+  "rule_final_state_before_cleanup": {
+    "id": 71,
+    "name": "Ekran testi d76134df",
+    "threshold": 90,
+    "enabled": true
+  },
+  "remaining_test_rows": {
+    "logs": 0,
+    "metrics": 0,
+    "alerts": 0,
+    "alert_states": 0,
+    "alert_rules": 0,
+    "processed_tasks": 0
+  },
+  "other_service_row_counts": {
+    "logs": 13,
+    "metrics": 40,
+    "alerts": 4,
+    "alert_states": 1
+  },
+  "other_rows_and_rules_unchanged": true,
+  "remaining_redis_results": 0,
+  "successful": true
+}

@@ -1,0 +1,228 @@
+{
+  "checked_at_utc": "2026-11-01T18:25:45.177439+00:00",
+  "base_url": "http://127.0.0.1:8080/api",
+  "scope": "Existing backend/access/SSE/simulator/load tests against Docker API through Nginx; not a browser visual or Azure test",
+  "tests_run": 54,
+  "successful": true,
+  "duration_seconds": 27.227,
+  "checks": [
+    {
+      "test": "test_access.AccessHTTPChecks.test_anonymous_and_invalid_credentials.test_anonymous_and_invalid_credentials",
+      "status": "passed"
+    },
+    {
+      "test": "test_access.AccessHTTPChecks.test_ingest_key_cannot_read_or_manage.test_ingest_key_cannot_read_or_manage",
+      "status": "passed"
+    },
+    {
+      "test": "test_access.AccessHTTPChecks.test_logout_revokes_cookie_and_open_sse.test_logout_revokes_cookie_and_open_sse",
+      "status": "passed"
+    },
+    {
+      "test": "test_access.AccessHTTPChecks.test_session_csrf_origin_and_openapi_permissions.test_session_csrf_origin_and_openapi_permissions",
+      "status": "passed"
+    },
+    {
+      "test": "test_access.AccessHTTPChecks.test_swagger_uses_public_api_prefix.test_swagger_uses_public_api_prefix",
+      "status": "passed"
+    },
+    {
+      "test": "test_access.AccessHTTPChecks.test_trailing_slash_redirect_keeps_public_api_prefix.test_trailing_slash_redirect_keeps_public_api_prefix",
+      "status": "passed"
+    },
+    {
+      "test": "test_access.AccessUnitChecks.test_cookie_mutations_require_csrf_and_allowed_origin.test_cookie_mutations_require_csrf_and_allowed_origin",
+      "status": "passed"
+    },
+    {
+      "test": "test_access.AccessUnitChecks.test_ingest_key_has_only_explicit_permissions.test_ingest_key_has_only_explicit_permissions",
+      "status": "passed"
+    },
+    {
+      "test": "test_access.AccessUnitChecks.test_login_rate_limit_and_secure_cookie_options.test_login_rate_limit_and_secure_cookie_options",
+      "status": "passed"
+    },
+    {
+      "test": "test_access.AccessUnitChecks.test_missing_configuration_and_redis_outage_fail_closed.test_missing_configuration_and_redis_outage_fail_closed",
+      "status": "passed"
+    },
+    {
+      "test": "test_access.AccessUnitChecks.test_public_health_and_default_closed_routes.test_public_health_and_default_closed_routes",
+      "status": "passed"
+    },
+    {
+      "test": "test_access.AccessUnitChecks.test_session_expiry_rotation_and_hashed_storage_key.test_session_expiry_rotation_and_hashed_storage_key",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendChecks.test_01_ingestion_and_filters.test_01_ingestion_and_filters",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendChecks.test_02_metric_threshold_boundary_and_cooldown.test_02_metric_threshold_boundary_and_cooldown",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendChecks.test_03_default_error_rule_at_51.test_03_default_error_rule_at_51",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendChecks.test_04_unit_and_service_isolation.test_04_unit_and_service_isolation",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendChecks.test_05_disabled_rule_and_update_validation.test_05_disabled_rule_and_update_validation",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendChecks.test_06_acknowledgement_is_idempotent.test_06_acknowledgement_is_idempotent",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendChecks.test_07_pagination.test_07_pagination",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendChecks.test_08_validation_and_missing_resources.test_08_validation_and_missing_resources",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendChecks.test_09_duplicate_task_and_atomic_rollback.test_09_duplicate_task_and_atomic_rollback",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendChecks.test_10_log_window_expired_and_level_isolation.test_10_log_window_expired_and_level_isolation",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendChecks.test_11_cooldown_expires_and_comparison_operators.test_11_cooldown_expires_and_comparison_operators",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendChecks.test_12_duplicate_rule_and_invalid_configuration.test_12_duplicate_rule_and_invalid_configuration",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendChecks.test_13_batch_multiple_alerts_and_duplicate_delivery.test_13_batch_multiple_alerts_and_duplicate_delivery",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendChecks.test_14_batch_error_threshold_and_atomic_rollback.test_14_batch_error_threshold_and_atomic_rollback",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendChecks.test_15_batch_validation_and_task_uuid.test_15_batch_validation_and_task_uuid",
+      "status": "passed"
+    },
+    {
+      "test": "test_backend.BackendChecks.test_16_pooled_connections_reset_row_format.test_16_pooled_connections_reset_row_format",
+      "status": "passed"
+    },
+    {
+      "test": "test_load_runner.LoadRunnerChecks.test_cleanup_rejects_user_services_before_any_database_access.test_cleanup_rejects_user_services_before_any_database_access",
+      "status": "passed"
+    },
+    {
+      "test": "test_load_runner.LoadRunnerChecks.test_cli_rejects_path_traversal_and_invalid_limits.test_cli_rejects_path_traversal_and_invalid_limits",
+      "status": "passed"
+    },
+    {
+      "test": "test_load_runner.LoadRunnerChecks.test_concurrency_is_bounded_and_all_success_results_are_collected.test_concurrency_is_bounded_and_all_success_results_are_collected",
+      "status": "passed"
+    },
+    {
+      "test": "test_load_runner.LoadRunnerChecks.test_failure_stops_new_submissions_and_preserves_error_result.test_failure_stops_new_submissions_and_preserves_error_result",
+      "status": "passed"
+    },
+    {
+      "test": "test_load_runner.LoadRunnerChecks.test_pacing_uses_record_counts_not_request_counts.test_pacing_uses_record_counts_not_request_counts",
+      "status": "passed"
+    },
+    {
+      "test": "test_load_runner.LoadRunnerChecks.test_percentile_nearest_rank_and_empty_sample.test_percentile_nearest_rank_and_empty_sample",
+      "status": "passed"
+    },
+    {
+      "test": "test_metric_stream.MetricStreamChecks.test_01_commit_filters_queue_and_reconnect.test_01_commit_filters_queue_and_reconnect",
+      "status": "passed"
+    },
+    {
+      "test": "test_metric_stream.MetricStreamChecks.test_02_window_matches_chart_and_older_rows_do_not_change_it.test_02_window_matches_chart_and_older_rows_do_not_change_it",
+      "status": "passed"
+    },
+    {
+      "test": "test_metric_stream.MetricStreamChecks.test_03_validation_before_stream_headers.test_03_validation_before_stream_headers",
+      "status": "passed"
+    },
+    {
+      "test": "test_simulator.SimulatorChecks.test_ctrl_c_stops_without_resending_and_reports_pending_records.test_ctrl_c_stops_without_resending_and_reports_pending_records",
+      "status": "passed"
+    },
+    {
+      "test": "test_simulator.SimulatorChecks.test_duration_run_counts_confirmed_records_and_writes_report.test_duration_run_counts_confirmed_records_and_writes_report",
+      "status": "passed"
+    },
+    {
+      "test": "test_simulator.SimulatorChecks.test_generated_records_match_api_models_and_selected_scenario.test_generated_records_match_api_models_and_selected_scenario",
+      "status": "passed"
+    },
+    {
+      "test": "test_simulator.SimulatorChecks.test_invalid_cli_limits_and_urls_are_rejected.test_invalid_cli_limits_and_urls_are_rejected",
+      "status": "passed"
+    },
+    {
+      "test": "test_simulator.SimulatorChecks.test_missing_ingest_key_stops_before_http_request.test_missing_ingest_key_stops_before_http_request",
+      "status": "passed"
+    },
+    {
+      "test": "test_simulator.SimulatorChecks.test_seed_reproduces_values_and_new_cycles_get_new_timestamps.test_seed_reproduces_values_and_new_cycles_get_new_timestamps",
+      "status": "passed"
+    },
+    {
+      "test": "test_simulator.SimulatorChecks.test_unknown_post_response_is_not_retried.test_unknown_post_response_is_not_retried",
+      "status": "passed"
+    },
+    {
+      "test": "test_simulator.SimulatorChecks.test_worker_failure_stops_production_and_keeps_unconfirmed_counts.test_worker_failure_stops_production_and_keeps_unconfirmed_counts",
+      "status": "passed"
+    },
+    {
+      "test": "test_simulator.SimulatorChecks.test_worker_success_is_distinct_from_queue_acceptance_and_timeout_is_bounded.test_worker_success_is_distinct_from_queue_acceptance_and_timeout_is_bounded",
+      "status": "passed"
+    },
+    {
+      "test": "test_stream.StreamChecks.test_01_headers_and_initial_snapshot.test_01_headers_and_initial_snapshot",
+      "status": "passed"
+    },
+    {
+      "test": "test_stream.StreamChecks.test_02_uncommitted_row_hidden_and_reconnect_resync.test_02_uncommitted_row_hidden_and_reconnect_resync",
+      "status": "passed"
+    },
+    {
+      "test": "test_stream.StreamChecks.test_03_api_queue_commit_and_notification.test_03_api_queue_commit_and_notification",
+      "status": "passed"
+    },
+    {
+      "test": "test_stream.StreamChecks.test_06_filtered_stream_outside_global_window_and_pagination.test_06_filtered_stream_outside_global_window_and_pagination",
+      "status": "passed"
+    },
+    {
+      "test": "test_stream.StreamChecks.test_07_twenty_first_row_updates_next_page_flag.test_07_twenty_first_row_updates_next_page_flag",
+      "status": "passed"
+    },
+    {
+      "test": "test_stream.StreamChecks.test_08_stream_filter_validation_before_headers.test_08_stream_filter_validation_before_headers",
+      "status": "passed"
+    },
+    {
+      "test": "test_stream.StreamRecoveryChecks.test_04_database_error_recovers_without_duplicate_events.test_04_database_error_recovers_without_duplicate_events",
+      "status": "passed"
+    },
+    {
+      "test": "test_stream.StreamRecoveryChecks.test_05_disconnect_stops_database_checks.test_05_disconnect_stops_database_checks",
+      "status": "passed"
+    }
+  ],
+  "missing_runtime_password_rejected": true,
+  "alternate_published_port_18081_redirects_passed": true
+}

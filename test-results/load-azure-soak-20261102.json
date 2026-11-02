@@ -1,0 +1,36 @@
+{
+  "checked_at_utc": "2026-11-01T22:40:50.798956+00:00",
+  "label": "azure-soak-20261102",
+  "environment": "Azure live API container; PostgreSQL/TimescaleDB, Redis and Celery worker",
+  "requested_records": 6000,
+  "record_mix": {
+    "logs": 3000,
+    "metrics": 3000
+  },
+  "target_records_per_second": 10,
+  "target_duration_seconds": 600,
+  "concurrency": 2,
+  "batch_size": 10,
+  "http_requests_expected": 600,
+  "accepted_http_status": 202,
+  "worker_completion": "SUCCESS (load runner reached its cleanup path, which is guarded by complete database/task verification)",
+  "test_data_cleaned": true,
+  "cleanup_verified": {
+    "qa_load_logs_remaining": 0,
+    "qa_load_metrics_remaining": 0
+  },
+  "api_route_telemetry_during_window": {
+    "logs_batch_202_count": 300,
+    "logs_batch_p50_ms": 3.32,
+    "logs_batch_p95_ms": 5.21,
+    "metrics_batch_202_count": 323,
+    "metrics_batch_test_requests_expected": 300,
+    "metrics_batch_extra_requests_note": "Additional batch requests include the concurrently running host-agent; they are not counted as load-test batches.",
+    "metrics_batch_p50_ms": 3.41,
+    "metrics_batch_p95_ms": 5.8
+  },
+  "runner_result_file": "not_written",
+  "runner_result_file_error": "PermissionError writing /app/test-results in the unprivileged API container; occurred after test cleanup",
+  "queue_peak": null,
+  "limitation": "Moderate 10-minute soak test; it does not establish maximum capacity, multi-hour reliability, or many simultaneous SSE viewers. API-route percentiles come from server telemetry and are not isolated client-side load-runner percentiles."
+}

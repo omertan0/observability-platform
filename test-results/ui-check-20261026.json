@@ -1,0 +1,84 @@
+{
+  "date_local": "2026-10-26",
+  "service": "qa-ui-d76134df",
+  "browser_automation": "blocked_by_saved_conversation_permission",
+  "checks": {
+    "connection_cards": {
+      "status": "passed",
+      "evidence": "user_report"
+    },
+    "logout_reload_login": {
+      "status": "passed",
+      "evidence": "user_report"
+    },
+    "live_metrics": {
+      "status": "passed",
+      "evidence": {
+        "cpu_live_updates": "user_report",
+        "memory_percent_and_chart": "user_screenshot",
+        "response_time_ms_chart": "user_report"
+      }
+    },
+    "live_logs": {
+      "status": "passed",
+      "evidence": "user_report: rows update without reload"
+    },
+    "filters_and_details": {
+      "status": "passed",
+      "evidence": "user_report",
+      "scope": [
+        "service_and_error_level",
+        "message_search",
+        "empty_search_result",
+        "clear_search_restores_rows",
+        "message_stack_trace_tags",
+        "escape_closes_details",
+        "next_page",
+        "return_to_first_live_page",
+        "date_range_empty_day",
+        "date_range_includes_test_day",
+        "clear_date_range"
+      ],
+      "not_checked": [
+        "reversed_date_range_validation"
+      ]
+    },
+    "alerts": {
+      "status": "passed",
+      "evidence": "user_report",
+      "scope": [
+        "service_filter",
+        "unseen_list",
+        "acknowledge",
+        "acknowledged_list_and_timestamp"
+      ]
+    },
+    "rule_management": {
+      "status": "passed",
+      "evidence": "user_report; final rule state independently read from DB",
+      "scope": [
+        "create",
+        "edit_threshold_85_to_90",
+        "disable",
+        "enable"
+      ]
+    }
+  },
+  "complete": true,
+  "test_data_cleaned": true,
+  "completion_scope": "Only listed guided manual scenarios; not automated browser or comprehensive accessibility/device testing.",
+  "finished_at_utc": "2026-10-25T22:33:38.911762+00:00",
+  "issues_reported": [],
+  "test_fixture_totals": {
+    "logs": 229,
+    "metrics": 687,
+    "tasks": 458
+  },
+  "screenshots": [
+    {
+      "path": "test-results/screenshots/ui-memory-20261026.png",
+      "source": "user_supplied_screenshot",
+      "shows": "memory metric, percent unit, timeline and connected stream"
+    }
+  ]
+}

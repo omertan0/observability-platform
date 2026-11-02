@@ -129,7 +129,7 @@ export default function MetricsPanel() {
         </label>
         <label htmlFor="metric-type">Metrik
           <select id="metric-type" value={draftMetricKey} onChange={(event) => { setDraftMetricKey(event.target.value); setFormError('') }}>
-            {METRIC_TYPES.map((item) => <option key={item.key} value={item.key}>{item.label} ({item.percent ? '%' : item.unit})</option>)}
+            {METRIC_TYPES.map((item) => <option key={item.key} value={item.key}>{item.label} ({item.displayUnit ?? item.unit})</option>)}
           </select>
         </label>
         <button type="submit" className="secondary-button">Göster</button>
@@ -145,7 +145,11 @@ export default function MetricsPanel() {
           <div className="metric-summary">
             <div><span>Kayıtlı son ölçüm · {service}</span><strong>{formatMetricValue(latest.value, metricKey)}</strong></div>
             <div><span>Ölçüm zamanı</span><time dateTime={latest.timestamp}>{dateFormatter.format(latest.time)}</time>
-              <small>Bu değer cihazdan şimdi okunmaz; gönderilen kaydın zamanını kontrol et.</small></div>
+              <small>{latest.tags?.source === 'host-agent'
+                ? 'Bu ölçüm sunucu ajanı tarafından otomatik alındı.'
+                : latest.tags?.source === 'api-instrumentation'
+                  ? `Bu süre API isteğinden otomatik ölçüldü: ${latest.tags.method} ${latest.tags.endpoint} · HTTP ${latest.tags.status_code}.`
+                  : 'Bu değer dışarıdan gönderildi; gönderilen kaydın zamanını kontrol et.'}</small></div>
           </div>
           <div className="metric-window">
             <div role="group" aria-label="Son ölçüme göre grafik zaman aralığı">
@@ -164,21 +168,21 @@ export default function MetricsPanel() {
                   tickFormatter={(value) => metricTickLabel(value, domain[1] - domain[0]).time}
                   tick={<MetricTimeTick span={domain[1] - domain[0]} />} />
                 <YAxis domain={type.percent ? [0, 100] : [0, 'auto']} ticks={type.percent ? [0, 25, 50, 75, 100] : undefined}
-                  unit={type.percent ? '%' : ' ms'} width={76} tick={{ fill: '#aab6c7', fontSize: 11 }} />
+                  unit={type.percent ? '%' : ` ${type.displayUnit ?? type.unit}`} width={76} tick={{ fill: '#aab6c7', fontSize: 11 }} />
                 <Tooltip content={<MetricTooltip points={shownPoints} metricKey={metricKey} />} />
                 <Line type="linear" dataKey="value" name={type.shortLabel} stroke="#98bcff" strokeWidth={2}
                   dot={{ r: 3, fill: '#98bcff', strokeWidth: 0 }} activeDot={{ r: 5 }} isAnimationActive={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>
-          <p className="metric-note">Yatay eksen ölçüm zamanı, dikey eksen {type.percent ? 'kullanım yüzdesidir' : 'milisaniye cinsinden yanıt süresidir'}. Noktaları birleştiren çizgi aradaki sürelerde yeni ölçüm yapıldığı anlamına gelmez.
+          <p className="metric-note">Yatay eksen ölçüm zamanı, dikey eksen {type.percent ? 'kullanım yüzdesidir' : metricKey === 'response' ? 'milisaniye cinsinden API yanıt süresidir' : 'saniyedeki bayt cinsinden disk aktarım hızıdır'}. Noktaları birleştiren çizgi aradaki sürelerde yeni ölçüm yapıldığı anlamına gelmez.
             {shownPoints.length === 1 && ' Bu aralıkta tek ölçüm var; çizgi için ikinci bir ölçüm gerekir.'}
             {duplicateCount > 0 && ' Aynı ölçüm zamanına sahip kayıtlar var; aynı dikey hizada görünmeleri normaldir. Noktanın bilgi kutusunda tüm değerler listelenir.'}</p>
           <details className="metric-data">
             <summary>Bu aralıktaki ölçümleri tablo olarak göster ({shownPoints.length})</summary>
             <div className="logs-scroll" tabIndex={0} role="region" aria-label={`${type.label} ölçüm tablosu`}>
               <table className="logs-table metric-table"><caption className="sr-only">{service} {type.label.toLocaleLowerCase('tr-TR')} ölçümleri, eskiden yeniye</caption>
-                <thead><tr><th scope="col">ÖLÇÜM ZAMANI</th><th scope="col">{type.shortLabel.toLocaleUpperCase('tr-TR')} ({type.percent ? '%' : type.unit})</th></tr></thead>
+                <thead><tr><th scope="col">ÖLÇÜM ZAMANI</th><th scope="col">{type.shortLabel.toLocaleUpperCase('tr-TR')} ({type.displayUnit ?? type.unit})</th></tr></thead>
                 <tbody>{shownPoints.map((point) => <tr key={point.id}><td><time dateTime={point.timestamp}>{dateFormatter.format(point.time)}</time></td><td>{formatMetricValue(point.value, metricKey)}</td></tr>)}</tbody>
               </table>
             </div>

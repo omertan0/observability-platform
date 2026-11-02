@@ -75,6 +75,29 @@ def save_record(kind: str, record: dict, task_id: str):
 
 
 @celery_app.task(**TASK_OPTIONS)
+def process_api_request(self, log_record: dict, metric_record: dict):
+    """Persist one API access log and its response-time sample atomically."""
+    task_id = self.request.id or str(uuid4())
+    with get_connection() as conn:
+        inserted = conn.execute(
+            """INSERT INTO processed_tasks (task_id, kind, record_count)
+               VALUES (%s, 'api_request', 2)
+               ON CONFLICT (task_id) DO NOTHING RETURNING task_id""",
+            (task_id,),
+        ).fetchone()
+        if inserted is None:
+            logger.info("API isteği görevi daha önce işlendi: %s", task_id)
+            return {"status": "already_processed"}
+        rules = load_rules(conn, "metric", [metric_record])
+        now = conn.execute("SELECT clock_timestamp()").fetchone()[0] if rules else None
+        insert_record(conn, "log", log_record)
+        insert_record(conn, "metric", metric_record)
+        evaluate_alerts(conn, "metric", metric_record, task_id, 0, rules, now)
+    logger.info("API istek logu ve yanıt süresi kaydedildi: %s", task_id)
+    return {"status": "saved", "record_count": 2}
+
+
+@celery_app.task(**TASK_OPTIONS)
 def process_log(self, record: dict):
     return save_record("log", record, self.request.id or str(uuid4()))
 

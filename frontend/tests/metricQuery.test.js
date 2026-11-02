@@ -113,3 +113,16 @@ test('summary and tooltip values retain the selected unit including zero', () =>
   assert.equal(formatMetricValue(0, 'response'), '0 ms')
   assert.equal(formatMetricValue(0, 'cpu'), '%0')
 })
+
+test('disk metrics use the ingestion names, bytes-per-second unit and readable B/s display', () => {
+  const readQuery = new URLSearchParams(buildMetricQuery('artersoft-vm', 'disk_read'))
+  assert.equal(readQuery.get('name'), 'disk_read_bytes_per_second')
+  assert.equal(readQuery.get('unit'), 'bytes_per_second')
+  const writeQuery = new URLSearchParams(buildMetricQuery('artersoft-vm', 'disk_write'))
+  assert.equal(writeQuery.get('name'), 'disk_write_bytes_per_second')
+  const readMetric = { ...metric(1, '2026-11-02T10:00:00Z', 1024.5), service: 'artersoft-vm',
+    name: 'disk_read_bytes_per_second', unit: 'bytes_per_second' }
+  assert.equal(metricPoints(response([readMetric]), 'artersoft-vm', 'disk_read')[0].value, 1024.5)
+  assert.equal(formatMetricValue(1024.5, 'disk_read'), '1.024,5 B/s')
+  assert.throws(() => metricPoints(response([{ ...readMetric, unit: 'percent' }]), 'artersoft-vm', 'disk_read'))
+})

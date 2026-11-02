@@ -2,9 +2,11 @@ export const METRIC_LIMIT = 100
 export const CPU_NAME = 'cpu_usage'
 export const CPU_UNIT = 'percent'
 export const METRIC_TYPES = [
-  { key: 'cpu', label: 'CPU kullanımı', shortLabel: 'CPU', name: CPU_NAME, unit: CPU_UNIT, percent: true },
-  { key: 'memory', label: 'Bellek kullanımı', shortLabel: 'Bellek', name: 'memory_usage', unit: 'percent', percent: true },
-  { key: 'response', label: 'Yanıt süresi', shortLabel: 'Yanıt süresi', name: 'response_time', unit: 'ms', percent: false },
+  { key: 'cpu', label: 'CPU kullanımı', shortLabel: 'CPU', name: CPU_NAME, unit: CPU_UNIT, displayUnit: '%', percent: true },
+  { key: 'memory', label: 'Bellek kullanımı', shortLabel: 'Bellek', name: 'memory_usage', unit: 'percent', displayUnit: '%', percent: true },
+  { key: 'response', label: 'API yanıt süresi', shortLabel: 'API yanıt süresi', name: 'response_time', unit: 'ms', displayUnit: 'ms', percent: false },
+  { key: 'disk_read', label: 'Disk okuma hızı', shortLabel: 'Disk okuma', name: 'disk_read_bytes_per_second', unit: 'bytes_per_second', displayUnit: 'B/s', percent: false },
+  { key: 'disk_write', label: 'Disk yazma hızı', shortLabel: 'Disk yazma', name: 'disk_write_bytes_per_second', unit: 'bytes_per_second', displayUnit: 'B/s', percent: false },
 ]
 
 export function metricType(key) {
@@ -18,7 +20,7 @@ const metricNumberFormatter = new Intl.NumberFormat('tr-TR', { maximumFractionDi
 export function formatMetricValue(value, key) {
   const type = metricType(key)
   const number = metricNumberFormatter.format(value)
-  return type.percent ? `%${number}` : `${number} ${type.unit}`
+  return type.percent ? `%${number}` : `${number} ${type.displayUnit ?? type.unit}`
 }
 export const METRIC_WINDOWS = [
   { key: '1h', label: '1 saat', duration: 3600000 },
